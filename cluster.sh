@@ -10,7 +10,7 @@ K=29
 PVAL=0.01
 NFFT=(0.001 0.0005 0.00025)
 
-for i in $(ls -1 $1*.ch* | sed s/.ch[0-9]// | uniq)
+for i in $(ls -1 $1/*.ch* | sed s/.ch[0-9]// | uniq)
 do
 #  echo $i
   job_name=$(basename $i)
