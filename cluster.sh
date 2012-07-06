@@ -17,6 +17,6 @@ do
   for j in ${NFFT[@]}
   do
 #    echo $j
-    qsub -N "MTBP-$job_name-$j" -pe batch 8 -b y -j y -cwd -o "$job_name-$j.log" -V ./cluster2.sh "\"$i\"" "\"$FS\"" "\"$j\"" "\"$NW\"" "\"$K\"" "\"$PVAL\"" "\"$3\"" "\"$4\""
+    qsub -N "MTBP-$job_name-$j" -pe batch 8 -b y -j y -cwd -o "$1/$job_name-$j.log" -V ./cluster2.sh "\"$i\"" "\"$FS\"" "\"$j\"" "\"$NW\"" "\"$K\"" "\"$PVAL\"" "\"$3\"" "\"$4\""
   done
 done
