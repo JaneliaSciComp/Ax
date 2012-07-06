@@ -66,6 +66,9 @@ df=f(2)-f(1);
 [p n e]=fileparts(FILEIN);
 DIR_OUT=fullfile(p);
 FILEINs=dir([FILEIN '.ch*']);
+[tmp{1:length(FILEINs)}]=deal(FILEINs.name);
+tmp=cellfun(@(x) regexp(x,'\.ch[1-4]'), tmp,'uniformoutput',false);
+FILEINs=FILEINs(~cellfun(@isempty,tmp));
 if(length(FILEINs)==0)
   error(['can''t find file ''' FILEIN '.ch*''']);
 end
