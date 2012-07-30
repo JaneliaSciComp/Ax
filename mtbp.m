@@ -40,7 +40,7 @@ if(NWORKERS==0)  NWORKERS=1;  end
 FS=FS/SUBSAMPLE;
 
 NFFT=2^nextpow2(NFFT_SEC*FS);  % ticks
-CHUNK=1000;  % NFFT/2 ticks
+CHUNK=round(256*1000/NFFT);  % NFFT/2 ticks
 
 FIRST_MT=nan;
 LAST_MT=nan;
