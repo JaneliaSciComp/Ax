@@ -1,10 +1,15 @@
-%function mtbp2(type,filepath)
+%function mtbp2(type,merge,filepath)
 %
 %type='R' is for rejection calls, 'US' for ultrasonic
+%set merge to the overlap criterion, in seconds, below which vocalizations
+%  are combined, or to [] to not combine
+%
+%mtbp2('US',[],'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+%mtbp2('R',0.005,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 
-function mtbp2(type,filepath)
+function mtbp2(type,merge,filepath)
 
-if((nargin~=2) || ~ismember(upper(type),{'R' 'US'}))
+if((nargin~=3) || ~ismember(upper(type),{'R' 'US'}))
   error('invalid args');
 end
 
@@ -16,58 +21,55 @@ end
 datafiles=unique(datafiles);
 for i=1:length(datafiles)
   disp(fullfile(filepath,datafiles{i}));
-  mtbp2_guts(type,fullfile(filepath,datafiles{i}));
+  mtbp2_guts(type,merge,fullfile(filepath,datafiles{i}));
 end
 
 
-function mtbp2_guts(type,filename)
+function mtbp2_guts(type,merge,filename)
 
 if(exist('matlabpool')==2 && matlabpool('size')==0)
   matlabpool open
 end
 
+CHUNK_LEN=10;  % sec
+GROUNDTRUTH=0;
+SAVE_PNG=1;
+SAVE_WAV=0;
+MERGE=merge;
+
 switch(upper(type))
   case 'US'   % ultrasonic
     OBJ_SIZE=1500;  % pixels
-    CONV_SIZE=[15 7];  % pixels
+    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
     F_LOW=20e3;  % Hz
     F_HIGH=120e3;  % Hz
     NHARM=1;
 
   case 'R'   % rejection
     OBJ_SIZE=1000;  % pixels
-    CONV_SIZE=[15 7];  % pixels, must be odd
-    OVERLAP=0.005;  % sec
+    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
     F_LOW=1e3;  % Hz
     F_HIGH=20e3;  % Hz
     NHARM=3;
 end
 
-CHUNK_LEN=10;  % sec
-GROUNDTRUTH=1;
-SAVE_PNG=1;
-SAVE_WAV=0;
 
-
-if(1)
 disp('loading data...');
 tmp=dir([filename,'_MTBP*.mat']);
 for i=1:length(tmp)
   data(i)=load(fullfile(fileparts(filename),tmp(i).name));
 end
 if(GROUNDTRUTH)
-groundtruth=load([filename '.txt']);
-groundtruth=groundtruth(:,2:3);
-groundtruth=sortrows(groundtruth,1);
-idx=find(groundtruth(:,1)>groundtruth(:,2));
-if(~isempty(idx))
-  error(['rows ' num2str(idx) ' of groundtruth are invalid.']);
-end
-end
+  groundtruth=load([filename '.txt']);
+  groundtruth=groundtruth(:,2:3);
+  groundtruth=sortrows(groundtruth,1);
+  idx=find(groundtruth(:,1)>groundtruth(:,2));
+  if(~isempty(idx))
+    error(['rows ' num2str(idx) ' of groundtruth are invalid.']);
+  end
 end
 
 
-if(1)
 disp('collapsing across channels and window sizes...');
 df=data(3).df/10;
 maxF=round(max([data(1).MT(:,2);  data(2).MT(:,2);  data(3).MT(:,2)]./df))+2+3+3;
@@ -76,16 +78,12 @@ maxT=max([data(1).MT(:,1);  2*data(2).MT(:,1)+1;  4*data(3).MT(:,1)+3]);
 syls_chunked={};
 chunk_len=round(CHUNK_LEN*data(1).FS/(data(1).NFFT/2));
 
-%parfor j=1:floor(maxT/chunk_len_win)
 maxT/round(maxT/chunk_len);
 chunk_splits=round(1:ans:(maxT+1));
 parfor j=1:(length(chunk_splits)-1)
   chunk_idx=chunk_splits(j);
   chunk_len_win=chunk_splits(j+1)-chunk_splits(j)-1;
-%  chunk_idx=1+(j-1)*chunk_len_win;
-%  disp(chunk_idx);
 
-%  chunk_idx=round(343*data(1).FS/data(1).NFFT*2);  chunk_len_win=round(1*data(1).FS/data(1).NFFT*2);
   im=false(maxF,chunk_len_win);
   idx=find((data(1).MT(:,1)>=chunk_idx) & (data(1).MT(:,1)<(chunk_idx+chunk_len_win)));
   for i=((-2:2)+3+3)
@@ -205,93 +203,96 @@ parfor i=1:length(syls_separate2)
   end
 end
 
-end
 
-
-if(1)
-disp('merging nearby syllables...');
-syls_merged=syls_separate;
-syls_merged2=syls_separate2;
-syls_merged3=ones(1,length(syls_merged2));
-OVERLAP=OVERLAP*data(1).FS/data(1).NFFT*2;
-tic;
-for i=1:(length(syls_merged2)-1)
-  if(isempty(syls_merged.PixelIdxList{i}))  continue;  end
-  if(toc>10)  disp([num2str(i) ' of ' num2str(length(syls_merged2))]);  tic;  end;
-  flag=1;
-  while(flag)
-    flag=0;
-    for j=(i+1):length(syls_merged2)
-      if(isempty(syls_merged.PixelIdxList{j}))  continue;  end
-      if(((sum(syls_merged2(i).BoundingBox([1 3]))+OVERLAP) > syls_merged2(j).BoundingBox(1)) &&...
-         ((sum(syls_merged2(j).BoundingBox([1 3]))+OVERLAP) > syls_merged2(i).BoundingBox(1)))
-        flag=1;
-%        syls_merged.NumObjects=syls_merged.NumObjects-1;
-        syls_merged.PixelIdxList{i}=[syls_merged.PixelIdxList{i}; syls_merged.PixelIdxList{j}];
-        syls_merged.PixelIdxList{j}=[];
-        syls_merged2(i).BoundingBox(1)=min([syls_merged2(i).BoundingBox(1) syls_merged2(j).BoundingBox(1)]);
-        syls_merged2(i).BoundingBox(2)=min([syls_merged2(i).BoundingBox(2) syls_merged2(j).BoundingBox(2)]);
-        syls_merged2(i).BoundingBox(3)=...
-            max([sum(syls_merged2(i).BoundingBox([1 3])) sum(syls_merged2(j).BoundingBox([1 3]))])-...
-            syls_merged2(i).BoundingBox(1);
-        syls_merged2(i).BoundingBox(4)=...
-            max([sum(syls_merged2(i).BoundingBox([2 4])) sum(syls_merged2(j).BoundingBox([2 4]))])-...
-            syls_merged2(i).BoundingBox(2);
-        syls_merged3(i)=syls_merged3(i)+syls_merged3(j);
-        syls_merged3(j)=0;
+if(~isempty(MERGE))
+  disp('merging nearby syllables...');
+  syls_merged=syls_separate;
+  syls_merged2=syls_separate2;
+  syls_merged3=ones(1,length(syls_merged2));
+  MERGE=MERGE*data(1).FS/data(1).NFFT*2;
+  tic;
+  for i=1:(length(syls_merged2)-1)
+    if(isempty(syls_merged.PixelIdxList{i}))  continue;  end
+    if(toc>10)  disp([num2str(i) ' of ' num2str(length(syls_merged2))]);  tic;  end;
+    flag=1;
+    while(flag)
+      flag=0;
+      for j=(i+1):length(syls_merged2)
+        if(isempty(syls_merged.PixelIdxList{j}))  continue;  end
+        if(((sum(syls_merged2(i).BoundingBox([1 3]))+MERGE) > syls_merged2(j).BoundingBox(1)) &&...
+           ((sum(syls_merged2(j).BoundingBox([1 3]))+MERGE) > syls_merged2(i).BoundingBox(1)))
+          flag=1;
+%          syls_merged.NumObjects=syls_merged.NumObjects-1;
+          syls_merged.PixelIdxList{i}=[syls_merged.PixelIdxList{i}; syls_merged.PixelIdxList{j}];
+          syls_merged.PixelIdxList{j}=[];
+          syls_merged2(i).BoundingBox(1)=min([syls_merged2(i).BoundingBox(1) syls_merged2(j).BoundingBox(1)]);
+          syls_merged2(i).BoundingBox(2)=min([syls_merged2(i).BoundingBox(2) syls_merged2(j).BoundingBox(2)]);
+          syls_merged2(i).BoundingBox(3)=...
+              max([sum(syls_merged2(i).BoundingBox([1 3])) sum(syls_merged2(j).BoundingBox([1 3]))])-...
+              syls_merged2(i).BoundingBox(1);
+          syls_merged2(i).BoundingBox(4)=...
+              max([sum(syls_merged2(i).BoundingBox([2 4])) sum(syls_merged2(j).BoundingBox([2 4]))])-...
+              syls_merged2(i).BoundingBox(2);
+          syls_merged3(i)=syls_merged3(i)+syls_merged3(j);
+          syls_merged3(j)=0;
+        end
       end
     end
   end
-end
-%idx=find(~cellfun(@isempty,syls_merged.PixelIdxList));
-idx=find(syls_merged3>=NHARM);
-syls_merged.NumObjects=length(idx);
-syls_merged.PixelIdxList={syls_merged.PixelIdxList{idx}};
-syls_merged2=regionprops(syls_merged,'basic');
-tmp=reshape([syls_merged2.BoundingBox],4,length(syls_merged2))';
-skytruth_merged=[[tmp(:,1) tmp(:,1)+tmp(:,3)]*data(1).NFFT/2 zeros(size(tmp,1),1) [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
+  %idx=find(~cellfun(@isempty,syls_merged.PixelIdxList));
+  idx=find(syls_merged3>=NHARM);
+  syls_merged.NumObjects=length(idx);
+  syls_merged.PixelIdxList={syls_merged.PixelIdxList{idx}};
+  syls_merged2=regionprops(syls_merged,'basic');
+  tmp=reshape([syls_merged2.BoundingBox],4,length(syls_merged2))';
+  skytruth=[[tmp(:,1) tmp(:,1)+tmp(:,3)]*data(1).NFFT/2 zeros(size(tmp,1),1) [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
+  syls2=syls_merged2;
+else
+  tmp=reshape([syls_separate2.BoundingBox],4,length(syls_separate2))';
+  skytruth=[[tmp(:,1) tmp(:,1)+tmp(:,3)]*data(1).NFFT/2 zeros(size(tmp,1),1) [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
+  syls2=syls_separate2;
 end
 
-
-%skytruth=skytruth_separate;
-skytruth=skytruth_merged;
 
 if(GROUNDTRUTH)
-disp('comparing to ground truth...');  drawnow;
-groundtruth(:,3)=0;
-skytruth(:,3)=0;
-a=1;  m=1;
-while((a<size(skytruth,1))&&(skytruth(a,2)<groundtruth(m,1)))
-  a=a+1;
-end
-%tic;
-while((a<=size(skytruth,1)) && (m<=size(groundtruth,1)))
-%  if(toc>1)  disp([num2str(a) ' ' num2str(m)]);  tic;  end
-  if(skytruth(a,1)<groundtruth(m,2))
-    groundtruth(m,3)=a;
-    skytruth(a,3)=m;
-    a=a+1;
-  end
-  if(a>size(skytruth,1))  break;  end
-  if(skytruth(a,1)>groundtruth(m,2))
-    m=m+1;
-    if(m>size(groundtruth,1))  break;  end
-  end
+  disp('comparing to ground truth...');  drawnow;
+  groundtruth(:,3)=0;
+  skytruth(:,3)=0;
+  a=1;  m=1;
   while((a<size(skytruth,1))&&(skytruth(a,2)<groundtruth(m,1)))
     a=a+1;
   end
+  %tic;
+  while((a<=size(skytruth,1)) && (m<=size(groundtruth,1)))
+  %  if(toc>1)  disp([num2str(a) ' ' num2str(m)]);  tic;  end
+    if(skytruth(a,1)<groundtruth(m,2))
+      groundtruth(m,3)=a;
+      skytruth(a,3)=m;
+      a=a+1;
+    end
+    if(a>size(skytruth,1))  break;  end
+    if(skytruth(a,1)>groundtruth(m,2))
+      m=m+1;
+      if(m>size(groundtruth,1))  break;  end
+    end
+    while((a<size(skytruth,1))&&(skytruth(a,2)<groundtruth(m,1)))
+      a=a+1;
+    end
+  end
+
+  misses=find(groundtruth(:,3)==0);
+  disp([num2str(size(groundtruth,1)) ' manually segmented syllables, ' num2str(length(misses)) ...
+      ' (' num2str(100*length(misses)/size(groundtruth,1),3) '%) of which are missed']);
+
+  false_alarms=find(skytruth(:,3)==0);
+  disp([num2str(size(skytruth,1)) ' automatically segmented syllables, ' num2str(length(false_alarms)) ...
+      ' (' num2str(100*length(false_alarms)/size(skytruth,1),3) '%) of which are false alarms']);
+else
+  disp([num2str(size(skytruth,1)) ' automatically segmented syllables']);
 end
 
-misses=find(groundtruth(:,3)==0);
-disp([num2str(size(groundtruth,1)) ' manually segmented syllables, ' num2str(length(misses)) ' (' num2str(100*length(misses)/size(groundtruth,1),3) '%) of which are missed']);
 
-false_alarms=find(skytruth(:,3)==0);
-disp([num2str(size(skytruth,1)) ' automatically segmented syllables, ' num2str(length(false_alarms)) ' (' num2str(100*length(false_alarms)/size(skytruth,1),3) '%) of which are false alarms']);
-end
-
-
-%%%  plot
-if(1)
+if(SAVE_WAV || SAVE_PNG)
 disp('plotting...');
 figure;
 get(gcf,'position');
@@ -301,8 +302,6 @@ subplot('position',[0.05 0.1 0.9 0.8]);
 set(gca,'color',[0 0 0]);
 hold on;
 
-%syls2=syls_separate2;
-syls2=syls_merged2;
 tmp=reshape([syls2.BoundingBox],4,length(syls2))';
 tmp(:,1)=tmp(:,1)+(CONV_SIZE(2)-1)/2;
 tmp(:,2)=tmp(:,2)+(CONV_SIZE(1)-1)/2;
@@ -311,11 +310,13 @@ tmp(:,4)=tmp(:,4)-CONV_SIZE(1);
 plot([tmp(:,1) tmp(:,1)+tmp(:,3) tmp(:,1)+tmp(:,3) tmp(:,1) tmp(:,1)]'.*data(1).NFFT/2/data(1).FS,...
      [tmp(:,2) tmp(:,2) tmp(:,2)+tmp(:,4) tmp(:,2)+tmp(:,4) tmp(:,2)]'.*df+F_LOW,'y');
 
+if(GROUNDTRUTH)
 line([groundtruth(misses,1) groundtruth(misses,2) groundtruth(misses,2) groundtruth(misses,1) groundtruth(misses,1)]./data(1).FS,...
     [F_LOW F_LOW F_HIGH F_HIGH F_LOW],'color',[0 1 0]);
 tmp=setdiff(1:size(groundtruth,1),misses);
 line([groundtruth(tmp,1) groundtruth(tmp,2) groundtruth(tmp,2) groundtruth(tmp,1) groundtruth(tmp,1)]./data(1).FS,...
     [F_LOW F_LOW F_HIGH F_HIGH F_LOW],'color',[1 1 1]);
+end
 
 for i=1:length(freq_contour)
   plot(freq_contour{i}(:,1),freq_contour{i}(:,2),'r-');
@@ -328,100 +329,119 @@ axis tight;
 xlabel('time (s)');
 ylabel('frequency (Hz)');
 
-if(1)  % plot hits, misses and false alarms separately
 [b,a]=butter(4,F_LOW/(data(1).FS/2),'high');
+
+
+% plot hits, misses and false alarms separately
+if(~GROUNDTRUTH)
+  for i=1:min([20 length(skytruth)])
+    left=skytruth(i,1);
+    right=skytruth(i,2);
+    mtbp2_print(i,left,right,'voc',filename,data(1).FS,data(1).NFFT,SAVE_WAV,SAVE_PNG);
+  end
+else
 
 hits=setdiff(1:size(groundtruth,1),misses);
 for i=1:min([20 length(hits)])
   left =min([groundtruth(hits(i),1) skytruth(groundtruth(hits(i),3),1)]);
   right=max([groundtruth(hits(i),2) skytruth(groundtruth(hits(i),3),2)]);
-  tmp=[];  p=[];
-  for j=1:4
-    fid=fopen([filename '.ch' num2str(j)],'r');
-    fseek(fid,round(4*(left-round(0.025*data(1).FS))),-1);
-    tmp=fread(fid,round(right-left+0.050*data(1).FS),'float32');
-    fclose(fid);
-    if(SAVE_WAV)
-      tmp2=filtfilt(b,a,tmp);
-      tmp2=tmp2./max([max(tmp2)-min(tmp2)]);
-      wavwrite(tmp2,22000,[fileparts(filename) '/voclist' num2str(i) '.ch' num2str(j) '.wav']);
-    end
-    [s,f,t,p(j,:,:)]=spectrogram(tmp,data(2).NFFT,[],[],data(2).FS,'yaxis');
-  end
-  tmp=squeeze(max(p,[],1));
-  tmp=log10(abs(tmp));
-  tmp4=reshape(tmp,1,prod(size(tmp)));
-  tmp2=prctile(tmp4,1);
-  tmp3=prctile(tmp4,99);
-  idx=find(tmp<tmp2);  tmp(idx)=tmp2;
-  idx=find(tmp>tmp3);  tmp(idx)=tmp3;
-  h=surf(t+left./data(1).FS-0.025,f-f(2)/2,tmp,'EdgeColor','none');
-  colormap(gray);
-  set(gca,'xlim',[left right]./data(1).FS+[-0.025 0.025]);
-  title(['hit #' num2str(i)]);
-  drawnow;
-  if(SAVE_PNG)  print('-dpng',[fileparts(filename) '/voclist' num2str(i) '.png']);  end
-  delete(h);
+  mtbp2_print(i,left,right,'hit',filename,data(1).FS,data(1).NFFT,SAVE_WAV,SAVE_PNG);
+
+%  tmp=[];  p=[];
+%  for j=1:4
+%    fid=fopen([filename '.ch' num2str(j)],'r');
+%    fseek(fid,round(4*(left-round(0.025*data(1).FS))),-1);
+%    tmp=fread(fid,round(right-left+0.050*data(1).FS),'float32');
+%    fclose(fid);
+%    if(SAVE_WAV)
+%      tmp2=filtfilt(b,a,tmp);
+%      tmp2=tmp2./max([max(tmp2)-min(tmp2)]);
+%      wavwrite(tmp2,22000,[fileparts(filename) '/voclist' num2str(i) '.ch' num2str(j) '.wav']);
+%    end
+%    [s,f,t,p(j,:,:)]=spectrogram(tmp,data(2).NFFT,[],[],data(2).FS,'yaxis');
+%  end
+%  tmp=squeeze(max(p,[],1));
+%  tmp=log10(abs(tmp));
+%  tmp4=reshape(tmp,1,prod(size(tmp)));
+%  tmp2=prctile(tmp4,1);
+%  tmp3=prctile(tmp4,99);
+%  idx=find(tmp<tmp2);  tmp(idx)=tmp2;
+%  idx=find(tmp>tmp3);  tmp(idx)=tmp3;
+%  h=surf(t+left./data(1).FS-0.025,f-f(2)/2,tmp,'EdgeColor','none');
+%  colormap(gray);
+%  set(gca,'xlim',[left right]./data(1).FS+[-0.025 0.025]);
+%  title(['hit #' num2str(i)]);
+%  drawnow;
+%  if(SAVE_PNG)  print('-dpng',[fileparts(filename) '/voclist' num2str(i) '.png']);  end
+%  delete(h);
 end
 
 for i=1:min([100 length(misses)])
-  tmp=[];  p=[];
-  for j=1:4
-    fid=fopen([filename '.ch' num2str(j)],'r');
-    fseek(fid,round(4*(groundtruth(misses(i),1)-round(0.025*data(1).FS))),-1);
-    tmp=fread(fid,round(diff(groundtruth(misses(i),1:2))+0.050*data(1).FS),'float32');
-    fclose(fid);
-    if(SAVE_WAV)
-      tmp2=filtfilt(b,a,tmp);
-      tmp2=tmp2./max([max(tmp2) -min(tmp2)]);
-      wavwrite(tmp2,22000,[fileparts(filename) '/miss' num2str(i) '.ch' num2str(j) '.wav']);
-    end
-    [s,f,t,p(j,:,:)]=spectrogram(tmp,data(2).NFFT,[],[],data(2).FS,'yaxis');
-  end
-  tmp=squeeze(max(p,[],1));
-  tmp=log10(abs(tmp));
-  tmp4=reshape(tmp,1,prod(size(tmp)));
-  tmp2=prctile(tmp4,1);
-  tmp3=prctile(tmp4,99);
-  idx=find(tmp<tmp2);  tmp(idx)=tmp2;
-  idx=find(tmp>tmp3);  tmp(idx)=tmp3;
-  h=surf(t+groundtruth(misses(i),1)./data(1).FS-0.025,f-f(2)/2,tmp,'EdgeColor','none');
-  colormap(gray);
-  set(gca,'xlim',groundtruth(misses(i),1:2)./data(1).FS+[-0.025 0.025]);
-  title(['miss #' num2str(i)]);
-  drawnow;
-  if(SAVE_PNG)  print('-dpng',[fileparts(filename) '/miss' num2str(i) '.png']);  end
-  delete(h);
+  left=groundtruth(misses(i),1);
+  right=groundtruth(misses(i),2);
+  mtbp2_print(i,left,right,'miss',filename,data(1).FS,data(1).NFFT,SAVE_WAV,SAVE_PNG);
+
+%  tmp=[];  p=[];
+%  for j=1:4
+%    fid=fopen([filename '.ch' num2str(j)],'r');
+%    fseek(fid,round(4*(groundtruth(misses(i),1)-round(0.025*data(1).FS))),-1);
+%    tmp=fread(fid,round(diff(groundtruth(misses(i),1:2))+0.050*data(1).FS),'float32');
+%    fclose(fid);
+%    if(SAVE_WAV)
+%      tmp2=filtfilt(b,a,tmp);
+%      tmp2=tmp2./max([max(tmp2) -min(tmp2)]);
+%      wavwrite(tmp2,22000,[fileparts(filename) '/miss' num2str(i) '.ch' num2str(j) '.wav']);
+%    end
+%    [s,f,t,p(j,:,:)]=spectrogram(tmp,data(2).NFFT,[],[],data(2).FS,'yaxis');
+%  end
+%  tmp=squeeze(max(p,[],1));
+%  tmp=log10(abs(tmp));
+%  tmp4=reshape(tmp,1,prod(size(tmp)));
+%  tmp2=prctile(tmp4,1);
+%  tmp3=prctile(tmp4,99);
+%  idx=find(tmp<tmp2);  tmp(idx)=tmp2;
+%  idx=find(tmp>tmp3);  tmp(idx)=tmp3;
+%  h=surf(t+groundtruth(misses(i),1)./data(1).FS-0.025,f-f(2)/2,tmp,'EdgeColor','none');
+%  colormap(gray);
+%  set(gca,'xlim',groundtruth(misses(i),1:2)./data(1).FS+[-0.025 0.025]);
+%  title(['miss #' num2str(i)]);
+%  drawnow;
+%  if(SAVE_PNG)  print('-dpng',[fileparts(filename) '/miss' num2str(i) '.png']);  end
+%  delete(h);
 end
 
 for i=1:min([100 length(false_alarms)])
-  tmp=[];  p=[];
-  for j=1:4
-    fid=fopen([filename '.ch' num2str(j)],'r');
-    fseek(fid,round(4*(skytruth(false_alarms(i),1)-round(0.025*data(1).FS))),-1);
-    tmp=fread(fid,round(diff(skytruth(false_alarms(i),1:2))+0.050*data(1).FS),'float32');
-    fclose(fid);
-    if(SAVE_WAV)
-      tmp2=filtfilt(b,a,tmp);
-      tmp2=tmp2./max([max(tmp2) -min(tmp2)]);
-      wavwrite(tmp2,22000,[fileparts(filename) '/false_alarm' num2str(i) '.ch' num2str(j) '.wav']);
-    end
-    [s,f,t,p(j,:,:)]=spectrogram(tmp,data(2).NFFT,[],[],data(2).FS,'yaxis');
-  end
-  tmp=squeeze(max(p,[],1));
-  tmp=log10(abs(tmp));
-  tmp4=reshape(tmp,1,prod(size(tmp)));
-  tmp2=prctile(tmp4,1);
-  tmp3=prctile(tmp4,99);
-  idx=find(tmp<tmp2);  tmp(idx)=tmp2;
-  idx=find(tmp>tmp3);  tmp(idx)=tmp3;
-  h=surf(t+skytruth(false_alarms(i),1)./data(1).FS-0.025,f-f(2)/2,tmp,'EdgeColor','none');
-  colormap(gray);
-  set(gca,'xlim',skytruth(false_alarms(i),1:2)./data(1).FS+[-0.025 0.025]);
-  title(['false_alarm #' num2str(i)]);
-  drawnow;
-  if(SAVE_PNG)  print('-dpng',[fileparts(filename) '/false_alarm' num2str(i) '.png']);  end
-  delete(h);
+  left=skytruth(false_alarms(i),1);
+  right=skytruth(false_alarms(i),2);
+  mtbp2_print(i,left,right,'false_alarm',filename,data(1).FS,data(1).NFFT,SAVE_WAV,SAVE_PNG);
+
+%  tmp=[];  p=[];
+%  for j=1:4
+%    fid=fopen([filename '.ch' num2str(j)],'r');
+%    fseek(fid,round(4*(skytruth(false_alarms(i),1)-round(0.025*data(1).FS))),-1);
+%    tmp=fread(fid,round(diff(skytruth(false_alarms(i),1:2))+0.050*data(1).FS),'float32');
+%    fclose(fid);
+%    if(SAVE_WAV)
+%      tmp2=filtfilt(b,a,tmp);
+%      tmp2=tmp2./max([max(tmp2) -min(tmp2)]);
+%      wavwrite(tmp2,22000,[fileparts(filename) '/false_alarm' num2str(i) '.ch' num2str(j) '.wav']);
+%    end
+%    [s,f,t,p(j,:,:)]=spectrogram(tmp,data(2).NFFT,[],[],data(2).FS,'yaxis');
+%  end
+%  tmp=squeeze(max(p,[],1));
+%  tmp=log10(abs(tmp));
+%  tmp4=reshape(tmp,1,prod(size(tmp)));
+%  tmp2=prctile(tmp4,1);
+%  tmp3=prctile(tmp4,99);
+%  idx=find(tmp<tmp2);  tmp(idx)=tmp2;
+%  idx=find(tmp>tmp3);  tmp(idx)=tmp3;
+%  h=surf(t+skytruth(false_alarms(i),1)./data(1).FS-0.025,f-f(2)/2,tmp,'EdgeColor','none');
+%  colormap(gray);
+%  set(gca,'xlim',skytruth(false_alarms(i),1:2)./data(1).FS+[-0.025 0.025]);
+%  title(['false_alarm #' num2str(i)]);
+%  drawnow;
+%  if(SAVE_PNG)  print('-dpng',[fileparts(filename) '/false_alarm' num2str(i) '.png']);  end
+%  delete(h);
 end
 end
 end
@@ -437,3 +457,35 @@ save([filename '_misses.txt'],'tmp','-ascii');
 tmp=[skytruth(false_alarms,1:2)./data(1).FS skytruth(false_alarms,4:5)];
 save([filename '_false_alarms.txt'],'tmp','-ascii');
 end
+
+
+
+function mtbp2_print(i,left,right,type,filename,FS,NFFT,SAVE_WAV,SAVE_PNG)
+
+tmp=[];  p=[];
+for j=1:4
+  fid=fopen([filename '.ch' num2str(j)],'r');
+  fseek(fid,round(4*(left-round(0.025*FS))),-1);
+  tmp=fread(fid,round(right-left+0.050*FS),'float32');
+  fclose(fid);
+  if(SAVE_WAV)
+    tmp2=filtfilt(b,a,tmp);
+    tmp2=tmp2./max([max(tmp2)-min(tmp2)]);
+    wavwrite(tmp2,22000,[fileparts(filename) '/' type num2str(i) '.ch' num2str(j) '.wav']);
+  end
+  [s,f,t,p(j,:,:)]=spectrogram(tmp,NFFT,[],[],FS,'yaxis');
+end
+tmp=squeeze(max(p,[],1));
+tmp=log10(abs(tmp));
+tmp4=reshape(tmp,1,prod(size(tmp)));
+tmp2=prctile(tmp4,1);
+tmp3=prctile(tmp4,99);
+idx=find(tmp<tmp2);  tmp(idx)=tmp2;
+idx=find(tmp>tmp3);  tmp(idx)=tmp3;
+h=surf(t+left./FS-0.025,f-f(2)/2,tmp,'EdgeColor','none');
+colormap(gray);
+set(gca,'xlim',[left right]./FS+[-0.025 0.025]);
+title([type ' #' num2str(i)]);
+drawnow;
+if(SAVE_PNG)  print('-dpng',[fileparts(filename) '/' type num2str(i) '.png']);  end
+delete(h);
