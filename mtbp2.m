@@ -45,7 +45,7 @@ end
 
 CHUNK_LEN=10;  % sec
 GROUNDTRUTH=0;
-SAVE_PNG=1;
+SAVE_PNG=0;
 SAVE_WAV=0;
 MERGE=merge;
 
@@ -72,6 +72,7 @@ for i=1:length(tmp)
   disp(tmp(i).name);
   data(i)=load(fullfile(fileparts(filename),tmp(i).name));
 end
+[~,idx]=sort([data.NFFT]);  data=data(idx);
 if(GROUNDTRUTH)
   groundtruth=load([filename '.txt']);
   groundtruth=groundtruth(:,2:3);
@@ -84,46 +85,69 @@ end
 
 
 disp('collapsing across channels and window sizes...');
-df=data(3).df/10;
-maxF=round(max([data(1).MT(:,2);  data(2).MT(:,2);  data(3).MT(:,2)]./df))+2+3+3;
-maxT=max([data(1).MT(:,1);  2*data(2).MT(:,1)+1;  4*data(3).MT(:,1)+3]);
+%df=data(3).df/10;
+%maxF=round(max([data(1).MT(:,2);  data(2).MT(:,2);  data(3).MT(:,2)]./df))+2+3+3;
+%maxT=max([data(1).MT(:,1);  2*data(2).MT(:,1)+1;  4*data(3).MT(:,1)+3]);
+df=min([data.df])/10;
+cat(1,data.MT);
+maxF=round(max(ans(:,2)./df))+2+3+3;
+minNFFT=min([data.NFFT]);
+maxNFFT=max([data.NFFT]);
+maxT=0;
+for i=1:length(data)
+  maxT=max([maxT; data(i).MT(:,1).*data(i).NFFT/minNFFT+data(i).NFFT/minNFFT-1]);
+end
 
 syls_chunked={};
-chunk_len=round(CHUNK_LEN*data(1).FS/(data(1).NFFT/2));
+chunk_len=round(CHUNK_LEN*data(1).FS/(minNFFT/2));
 
 maxT/round(maxT/chunk_len);
 chunk_splits=round(1:ans:(maxT+1));
-parfor j=1:(length(chunk_splits)-1)
+for j=1:(length(chunk_splits)-1)
   chunk_idx=chunk_splits(j);
   chunk_len_win=chunk_splits(j+1)-chunk_splits(j)-1;
 
   im=false(maxF,chunk_len_win);
-  idx=find((data(1).MT(:,1)>=chunk_idx) & (data(1).MT(:,1)<(chunk_idx+chunk_len_win)));
-  for i=((-2:2)+3+3)
-    im(sub2ind([maxF,chunk_len_win],round(data(1).MT(idx,2)/df  )+i,  data(1).MT(idx,1)-chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(1).MT(idx,2)/df-1)+i,  data(1).MT(idx,1)-chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(1).MT(idx,2)/df-2)+i,  data(1).MT(idx,1)-chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(1).MT(idx,2)/df-3)+i,  data(1).MT(idx,1)-chunk_idx+1))=true;
+
+  for k=1:length(data)
+    tmp=data(k).NFFT/minNFFT;
+    tmp2=maxNFFT/data(k).NFFT;
+    idx=find(((tmp*data(k).MT(:,1)-(tmp-1))>=chunk_idx) & ((tmp*data(k).MT(:,1)+(tmp-1))<(chunk_idx+chunk_len_win)));
+    for i=(-log2(tmp2):log2(tmp2))+3+3
+      for m=0:(tmp2+1)
+        for n=-(tmp-1):(tmp-1)
+          im(sub2ind([maxF,chunk_len_win],round(data(k).MT(idx,2)/df-m)+i, tmp*data(k).MT(idx,1)+n-chunk_idx+1))=true;
+        end
+      end
+    end
   end
-  idx=find(((2*data(2).MT(:,1)-1)>=chunk_idx) & ((2*data(2).MT(:,1)+1)<(chunk_idx+chunk_len_win)));
-  for i=((-1:1)+3+3)
-    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df  )+i,2*data(2).MT(idx,1)-1-chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df  )+i,2*data(2).MT(idx,1)  -chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df  )+i,2*data(2).MT(idx,1)+1-chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df-1)+i,2*data(2).MT(idx,1)-1-chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df-1)+i,2*data(2).MT(idx,1)  -chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df-1)+i,2*data(2).MT(idx,1)+1-chunk_idx+1))=true;
-  end
-  idx=find(((4*data(3).MT(:,1)-3)>=chunk_idx) & ((4*data(3).MT(:,1)+3)<(chunk_idx+chunk_len_win)));
-  for i=0
-    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)-3-chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)-2-chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)-1-chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)  -chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)+1-chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)+2-chunk_idx+1))=true;
-    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)+3-chunk_idx+1))=true;
-  end
+
+%  idx=find((data(1).MT(:,1)>=chunk_idx) & (data(1).MT(:,1)<(chunk_idx+chunk_len_win)));
+%  for i=((-2:2)+3+3)
+%    im(sub2ind([maxF,chunk_len_win],round(data(1).MT(idx,2)/df  )+i,  data(1).MT(idx,1)-chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(1).MT(idx,2)/df-1)+i,  data(1).MT(idx,1)-chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(1).MT(idx,2)/df-2)+i,  data(1).MT(idx,1)-chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(1).MT(idx,2)/df-3)+i,  data(1).MT(idx,1)-chunk_idx+1))=true;
+%  end
+%  idx=find(((2*data(2).MT(:,1)-1)>=chunk_idx) & ((2*data(2).MT(:,1)+1)<(chunk_idx+chunk_len_win)));
+%  for i=((-1:1)+3+3)
+%    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df  )+i,2*data(2).MT(idx,1)-1-chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df  )+i,2*data(2).MT(idx,1)  -chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df  )+i,2*data(2).MT(idx,1)+1-chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df-1)+i,2*data(2).MT(idx,1)-1-chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df-1)+i,2*data(2).MT(idx,1)  -chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(2).MT(idx,2)/df-1)+i,2*data(2).MT(idx,1)+1-chunk_idx+1))=true;
+%  end
+%  idx=find(((4*data(3).MT(:,1)-3)>=chunk_idx) & ((4*data(3).MT(:,1)+3)<(chunk_idx+chunk_len_win)));
+%  for i=0
+%    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)-3-chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)-2-chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)-1-chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)  -chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)+1-chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)+2-chunk_idx+1))=true;
+%    im(sub2ind([maxF,chunk_len_win],round(data(3).MT(idx,2)/df  )+i,4*data(3).MT(idx,1)+3-chunk_idx+1))=true;
+%  end
 
   tmp=(round(F_LOW/df):round(F_HIGH/df))+3+3;
   im=[zeros(length(tmp),(CONV_SIZE(2)-1)/2) im(tmp,:) zeros(length(tmp),(CONV_SIZE(2)-1)/2)];
@@ -189,22 +213,20 @@ tmp(:,1)=tmp(:,1)+(CONV_SIZE(2)-1)/2;
 tmp(:,2)=tmp(:,2)+(CONV_SIZE(1)-1)/2;
 tmp(:,3)=tmp(:,3)-CONV_SIZE(2);
 tmp(:,4)=tmp(:,4)-CONV_SIZE(1);
-skytruth_separate=[[tmp(:,1) tmp(:,1)+tmp(:,3)]*data(1).NFFT/2 zeros(size(tmp,1),1) [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
+skytruth_separate=[[tmp(:,1) tmp(:,1)+tmp(:,3)]*minNFFT/2 zeros(size(tmp,1),1) [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
 
 
 disp('calculating frequency contours...');
 freq_contour={};
-parfor i=1:length(syls_separate2)
-  idx={};
-  for j=1:3
-    idx{j}=find(((2^(j-1)*data(j).MT(:,1))>=syls_separate2(i).BoundingBox(1)) & ...
+for i=1:length(syls_separate2)
+  tmp=[];
+  for j=1:length(data)
+    idx=find(((2^(j-1)*data(j).MT(:,1))>=syls_separate2(i).BoundingBox(1)) & ...
                 ((2^(j-1)*data(j).MT(:,1))<=sum(syls_separate2(i).BoundingBox([1 3]))) & ...
                 (data(j).MT(:,2)>=(syls_separate2(i).BoundingBox(2)*df+F_LOW)) & ...
                 (data(j).MT(:,2)<=(sum(syls_separate2(i).BoundingBox([2 4]))*df+F_LOW)));
+    tmp=[tmp; bsxfun(@times,data(j).MT(idx,1:3),[data(j).NFFT/2/data(j).FS 1 1])];
   end
-  tmp=[bsxfun(@times,data(1).MT(idx{1},1:3),[data(1).NFFT/2/data(1).FS 1 1]); ...
-       bsxfun(@times,data(2).MT(idx{2},1:3),[data(2).NFFT/2/data(1).FS 1 1]);...
-       bsxfun(@times,data(3).MT(idx{3},1:3),[data(3).NFFT/2/data(1).FS 1 1])];
   tmp=sortrows(tmp);
   freq_contour{i}=zeros(length(unique(tmp(:,1))),3);
   j=1;  l=1;
@@ -222,7 +244,7 @@ if(~isempty(MERGE))
   syls_merged=syls_separate;
   syls_merged2=syls_separate2;
   syls_merged3=ones(1,length(syls_merged2));
-  MERGE=MERGE*data(1).FS/data(1).NFFT*2;
+  MERGE=MERGE*data(1).FS/minNFFT*2;
   tic;
   for i=1:(length(syls_merged2)-1)
     if(isempty(syls_merged.PixelIdxList{i}))  continue;  end
@@ -258,11 +280,11 @@ if(~isempty(MERGE))
   syls_merged.PixelIdxList={syls_merged.PixelIdxList{idx}};
   syls_merged2=regionprops(syls_merged,'basic');
   tmp=reshape([syls_merged2.BoundingBox],4,length(syls_merged2))';
-  skytruth=[[tmp(:,1) tmp(:,1)+tmp(:,3)]*data(1).NFFT/2 zeros(size(tmp,1),1) [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
+  skytruth=[[tmp(:,1) tmp(:,1)+tmp(:,3)]*minNFFT/2 zeros(size(tmp,1),1) [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
   syls2=syls_merged2;
 else
   tmp=reshape([syls_separate2.BoundingBox],4,length(syls_separate2))';
-  skytruth=[[tmp(:,1) tmp(:,1)+tmp(:,3)]*data(1).NFFT/2 zeros(size(tmp,1),1) [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
+  skytruth=[[tmp(:,1) tmp(:,1)+tmp(:,3)]*minNFFT/2 zeros(size(tmp,1),1) [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
   syls2=syls_separate2;
 end
 
@@ -320,7 +342,7 @@ tmp(:,1)=tmp(:,1)+(CONV_SIZE(2)-1)/2;
 tmp(:,2)=tmp(:,2)+(CONV_SIZE(1)-1)/2;
 tmp(:,3)=tmp(:,3)-CONV_SIZE(2);
 tmp(:,4)=tmp(:,4)-CONV_SIZE(1);
-plot([tmp(:,1) tmp(:,1)+tmp(:,3) tmp(:,1)+tmp(:,3) tmp(:,1) tmp(:,1)]'.*data(1).NFFT/2/data(1).FS,...
+plot([tmp(:,1) tmp(:,1)+tmp(:,3) tmp(:,1)+tmp(:,3) tmp(:,1) tmp(:,1)]'.*minNFFT/2/data(1).FS,...
      [tmp(:,2) tmp(:,2) tmp(:,2)+tmp(:,4) tmp(:,2)+tmp(:,4) tmp(:,2)]'.*df+F_LOW,'y');
 
 if(GROUNDTRUTH)
@@ -335,7 +357,7 @@ for i=1:length(freq_contour)
   plot(freq_contour{i}(:,1),freq_contour{i}(:,2),'r-');
 end
 
-plot(repmat(chunk_splits*data(1).NFFT/2/data(1).FS,2,1),...
+plot(repmat(chunk_splits*minNFFT/2/data(1).FS,2,1),...
      repmat([F_LOW; F_HIGH],1,length(chunk_splits)),'c');
 
 axis tight;
@@ -350,7 +372,7 @@ if(~GROUNDTRUTH)
   for i=1:min([20 length(skytruth)])
     left=skytruth(i,1);
     right=skytruth(i,2);
-    mtbp2_print(i,left,right,'voc',filename,data(1).FS,data(1).NFFT,SAVE_WAV,SAVE_PNG);
+    mtbp2_print(i,left,right,'voc',filename,data(1).FS,minNFFT,SAVE_WAV,SAVE_PNG);
   end
 else
 
@@ -358,103 +380,19 @@ hits=setdiff(1:size(groundtruth,1),misses);
 for i=1:min([20 length(hits)])
   left =min([groundtruth(hits(i),1) skytruth(groundtruth(hits(i),3),1)]);
   right=max([groundtruth(hits(i),2) skytruth(groundtruth(hits(i),3),2)]);
-  mtbp2_print(i,left,right,'hit',filename,data(1).FS,data(1).NFFT,SAVE_WAV,SAVE_PNG);
-
-%  tmp=[];  p=[];
-%  for j=1:4
-%    fid=fopen([filename '.ch' num2str(j)],'r');
-%    fseek(fid,round(4*(left-round(0.025*data(1).FS))),-1);
-%    tmp=fread(fid,round(right-left+0.050*data(1).FS),'float32');
-%    fclose(fid);
-%    if(SAVE_WAV)
-%      tmp2=filtfilt(b,a,tmp);
-%      tmp2=tmp2./max([max(tmp2)-min(tmp2)]);
-%      wavwrite(tmp2,22000,[fileparts(filename) '/voclist' num2str(i) '.ch' num2str(j) '.wav']);
-%    end
-%    [s,f,t,p(j,:,:)]=spectrogram(tmp,data(2).NFFT,[],[],data(2).FS,'yaxis');
-%  end
-%  tmp=squeeze(max(p,[],1));
-%  tmp=log10(abs(tmp));
-%  tmp4=reshape(tmp,1,prod(size(tmp)));
-%  tmp2=prctile(tmp4,1);
-%  tmp3=prctile(tmp4,99);
-%  idx=find(tmp<tmp2);  tmp(idx)=tmp2;
-%  idx=find(tmp>tmp3);  tmp(idx)=tmp3;
-%  h=surf(t+left./data(1).FS-0.025,f-f(2)/2,tmp,'EdgeColor','none');
-%  colormap(gray);
-%  set(gca,'xlim',[left right]./data(1).FS+[-0.025 0.025]);
-%  title(['hit #' num2str(i)]);
-%  drawnow;
-%  if(SAVE_PNG)  print('-dpng',[fileparts(filename) '/voclist' num2str(i) '.png']);  end
-%  delete(h);
+  mtbp2_print(i,left,right,'hit',filename,data(1).FS,minNFFT,SAVE_WAV,SAVE_PNG);
 end
 
 for i=1:min([100 length(misses)])
   left=groundtruth(misses(i),1);
   right=groundtruth(misses(i),2);
-  mtbp2_print(i,left,right,'miss',filename,data(1).FS,data(1).NFFT,SAVE_WAV,SAVE_PNG);
-
-%  tmp=[];  p=[];
-%  for j=1:4
-%    fid=fopen([filename '.ch' num2str(j)],'r');
-%    fseek(fid,round(4*(groundtruth(misses(i),1)-round(0.025*data(1).FS))),-1);
-%    tmp=fread(fid,round(diff(groundtruth(misses(i),1:2))+0.050*data(1).FS),'float32');
-%    fclose(fid);
-%    if(SAVE_WAV)
-%      tmp2=filtfilt(b,a,tmp);
-%      tmp2=tmp2./max([max(tmp2) -min(tmp2)]);
-%      wavwrite(tmp2,22000,[fileparts(filename) '/miss' num2str(i) '.ch' num2str(j) '.wav']);
-%    end
-%    [s,f,t,p(j,:,:)]=spectrogram(tmp,data(2).NFFT,[],[],data(2).FS,'yaxis');
-%  end
-%  tmp=squeeze(max(p,[],1));
-%  tmp=log10(abs(tmp));
-%  tmp4=reshape(tmp,1,prod(size(tmp)));
-%  tmp2=prctile(tmp4,1);
-%  tmp3=prctile(tmp4,99);
-%  idx=find(tmp<tmp2);  tmp(idx)=tmp2;
-%  idx=find(tmp>tmp3);  tmp(idx)=tmp3;
-%  h=surf(t+groundtruth(misses(i),1)./data(1).FS-0.025,f-f(2)/2,tmp,'EdgeColor','none');
-%  colormap(gray);
-%  set(gca,'xlim',groundtruth(misses(i),1:2)./data(1).FS+[-0.025 0.025]);
-%  title(['miss #' num2str(i)]);
-%  drawnow;
-%  if(SAVE_PNG)  print('-dpng',[fileparts(filename) '/miss' num2str(i) '.png']);  end
-%  delete(h);
+  mtbp2_print(i,left,right,'miss',filename,data(1).FS,minNFFT,SAVE_WAV,SAVE_PNG);
 end
 
 for i=1:min([100 length(false_alarms)])
   left=skytruth(false_alarms(i),1);
   right=skytruth(false_alarms(i),2);
-  mtbp2_print(i,left,right,'false_alarm',filename,data(1).FS,data(1).NFFT,SAVE_WAV,SAVE_PNG);
-
-%  tmp=[];  p=[];
-%  for j=1:4
-%    fid=fopen([filename '.ch' num2str(j)],'r');
-%    fseek(fid,round(4*(skytruth(false_alarms(i),1)-round(0.025*data(1).FS))),-1);
-%    tmp=fread(fid,round(diff(skytruth(false_alarms(i),1:2))+0.050*data(1).FS),'float32');
-%    fclose(fid);
-%    if(SAVE_WAV)
-%      tmp2=filtfilt(b,a,tmp);
-%      tmp2=tmp2./max([max(tmp2) -min(tmp2)]);
-%      wavwrite(tmp2,22000,[fileparts(filename) '/false_alarm' num2str(i) '.ch' num2str(j) '.wav']);
-%    end
-%    [s,f,t,p(j,:,:)]=spectrogram(tmp,data(2).NFFT,[],[],data(2).FS,'yaxis');
-%  end
-%  tmp=squeeze(max(p,[],1));
-%  tmp=log10(abs(tmp));
-%  tmp4=reshape(tmp,1,prod(size(tmp)));
-%  tmp2=prctile(tmp4,1);
-%  tmp3=prctile(tmp4,99);
-%  idx=find(tmp<tmp2);  tmp(idx)=tmp2;
-%  idx=find(tmp>tmp3);  tmp(idx)=tmp3;
-%  h=surf(t+skytruth(false_alarms(i),1)./data(1).FS-0.025,f-f(2)/2,tmp,'EdgeColor','none');
-%  colormap(gray);
-%  set(gca,'xlim',skytruth(false_alarms(i),1:2)./data(1).FS+[-0.025 0.025]);
-%  title(['false_alarm #' num2str(i)]);
-%  drawnow;
-%  if(SAVE_PNG)  print('-dpng',[fileparts(filename) '/false_alarm' num2str(i) '.png']);  end
-%  delete(h);
+  mtbp2_print(i,left,right,'false_alarm',filename,data(1).FS,minNFFT,SAVE_WAV,SAVE_PNG);
 end
 end
 end
