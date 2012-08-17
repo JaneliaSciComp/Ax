@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # cd to folder containing cluster.sh and then execute:
-#     ./cluster.sh  <R|US> full_path_to_folder  [start_sec]  [stop_sec]
-# for example
-#     ./cluster.sh  US /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/
+#   ./cluster.sh  <R|US> full_path_to_data  [start_sec]  [stop_sec]
 # use R for rejection calls, and US for ultrasonic vocalizations
+# data can either be a folder of sessions or a single session's base filename
+# for example
+#   ./cluster.sh  US /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/
+#   ./cluster.sh  US /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1
 
 # FS, NW, K, PVAL, and NFFT specify the parameters to each call of mtbp().
 # if any are a scalar the same value is used for each call.
@@ -71,7 +73,12 @@ fi
 #echo ${NFFT[@]}
 
 # launch one instance of mtbp() per set of params
-for i in $(ls -1 $2/*.ch* | sed s/.ch[0-9]// | uniq)
+if [ -d $2 ] ; then
+  ii=$(ls -1 $2/*.ch* | sed s/.ch[0-9]// | uniq)
+else
+  ii=$2
+fi
+for i in $ii
 do
 #  echo $i
   job_name=$(basename $i)

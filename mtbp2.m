@@ -1,27 +1,39 @@
-%function mtbp2(type,merge,filepath)
+%function mtbp2(type,merge,datapath)
 %
 %type='R' is for rejection calls, 'US' for ultrasonic
 %set merge to the overlap criterion, in seconds, below which vocalizations
 %  are combined, or to [] to not combine
+%datapath can be to a folder or to a set of files.
+%for the latter, omit the .ch* suffix
 %
 %mtbp2('US',[],'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 %mtbp2('R',0.005,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+%mtbp2('R',0.005,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1');
 
-function mtbp2(type,merge,filepath)
+function mtbp2(type,merge,datapath)
 
 if((nargin~=3) || ~ismember(upper(type),{'R' 'US'}))
   error('invalid args');
 end
 
-tmp=dir(fullfile(filepath,'*_MTBP*.mat'));
-idx=strfind({tmp.name},'_MTBP');
-for i=1:length(tmp)
-  datafiles{i}=tmp(i).name(1:(idx{i}(end)-1));
-end
-datafiles=unique(datafiles);
-for i=1:length(datafiles)
-  disp(fullfile(filepath,datafiles{i}));
-  mtbp2_guts(type,merge,fullfile(filepath,datafiles{i}));
+tmp=dir(fullfile(datapath,'*_MTBP*.mat'));
+if(~isempty(tmp))
+  idx=strfind({tmp.name},'_MTBP');
+  for i=1:length(tmp)
+    datafiles{i}=tmp(i).name(1:(idx{i}(end)-1));
+  end
+  datafiles=unique(datafiles);
+  for i=1:length(datafiles)
+    disp(fullfile(datapath,datafiles{i}));
+    mtbp2_guts(type,merge,fullfile(datapath,datafiles{i}));
+  end
+else
+  tmp=dir([datapath '*_MTBP*.mat']);
+  if(~isempty(tmp))
+    mtbp2_guts(type,merge,datapath);
+  else
+    error(['can''t find ' datapath]);
+  end
 end
 
 
@@ -57,6 +69,7 @@ end
 disp('loading data...');
 tmp=dir([filename,'_MTBP*.mat']);
 for i=1:length(tmp)
+  disp(tmp(i).name);
   data(i)=load(fullfile(fileparts(filename),tmp(i).name));
 end
 if(GROUNDTRUTH)
