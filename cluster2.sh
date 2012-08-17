@@ -12,7 +12,7 @@ if [ -d /scratch/$USER ]
     export MCR_CACHE_ROOT=~/mcr_cache_root.$JOB_ID
 fi
 
-./mtbp/distrib/run_mtbp.sh /usr/local/matlab-2012a $1 $2 $3 $4 $5 $6 $7 $8
+./mtbp/distrib/run_mtbp.sh /usr/local/matlab-2012a $1 $2 $3 $4 $5 $6 $7 $8 $9
 
 if [ -d /scratch/$USER ]
   then

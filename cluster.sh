@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # cd to folder containing cluster.sh and then execute:
-#     ./cluster.sh  <R|US> full_path_to_folder  [start_sec]  [stop_sec]
-# for example
-#     ./cluster.sh  US /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/
+#   ./cluster.sh  <R|US> full_path_to_data  [start_sec]  [stop_sec]
 # use R for rejection calls, and US for ultrasonic vocalizations
+# data can either be a folder of sessions or a single session's base filename
+# for example
+#   ./cluster.sh  US /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/
+#   ./cluster.sh  US /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1
 
 # FS, NW, K, PVAL, and NFFT specify the parameters to each call of mtbp().
 # if any are a scalar the same value is used for each call.
@@ -23,6 +25,7 @@ if [ $1 == 'US' ] ; then
   K=43
   PVAL=0.01
   NFFT=(0.001 0.0005 0.00025)  # sec (rounds up to next power of 2 tics)
+  #NFFT=(0.00025)  # sec (rounds up to next power of 2 tics)
 elif [ $1 == 'R' ]; then
   FS=450450;  # Hz
   NW=18
@@ -71,13 +74,20 @@ fi
 #echo ${NFFT[@]}
 
 # launch one instance of mtbp() per set of params
-for i in $(ls -1 $2/*.ch* | sed s/.ch[0-9]// | uniq)
+if [ -d $2 ] ; then
+  ii=$(ls -1 $2/*.ch* | sed s/.ch[0-9]// | uniq)
+  dir_name=$2
+else
+  ii=$2
+  dir_name=$(dirname $2)
+fi
+for i in $ii
 do
 #  echo $i
   job_name=$(basename $i)
   for j in $(seq 0 $((${#NFFT[@]} - 1)))
   do
 #    echo $j
-    qsub -N "$job_name-$j" -pe batch 8 -b y -j y -cwd -o "$2/$job_name-$j.log" -V ./cluster2.sh "\"$i\"" "\"${FS[j]}\"" "\"${NFFT[j]}\"" "\"${NW[j]}\"" "\"${K[j]}\"" "\"${PVAL[j]}\"" "\"$3\"" "\"$4\""
+    qsub -N "$job_name-$j" -pe batch 8 -b y -j y -cwd -o "$dir_name/$job_name-$j.log" -V ./cluster2.sh "\"$i\"" "\"$j\"" "\"${FS[j]}\"" "\"${NFFT[j]}\"" "\"${NW[j]}\"" "\"${K[j]}\"" "\"${PVAL[j]}\"" "\"$3\"" "\"$4\""
   done
 done
