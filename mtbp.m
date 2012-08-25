@@ -1,10 +1,10 @@
-% function mtbp(FILEIN,FS,NFFT_SEC,NW,K,PVAL)
-% function mtbp(FILEIN,FS,NFFT_SEC,NW,K,PVAL,START,STOP)
+% function mtbp(FILEIN,FILEOUT,FS,NFFT_SEC,NW,K,PVAL)
+% function mtbp(FILEIN,FILEOUT,FS,NFFT_SEC,NW,K,PVAL,START,STOP)
 %
-% mtbp('urine',200e3,0.001,15,29,0.01);
-% mtbp('groundtruth',450450,0.001,15,29,0.01,0,30);
+% mtbp('urine',1,200e3,0.001,15,29,0.01);
+% mtbp('groundtruth',1,450450,0.001,15,29,0.01,0,30);
 
-function mtbp(FILEIN,FS,NFFT_SEC,NW,K,PVAL,varargin)
+function mtbp(FILEIN,FILEOUT,FS,NFFT_SEC,NW,K,PVAL,varargin)
 
 tstart=tic;
 
@@ -22,16 +22,17 @@ if(ischar(NW))        NW=str2num(NW);              end
 if(ischar(K))         K=str2num(K);                end
 if(ischar(PVAL))      PVAL=str2num(PVAL);          end
 
-if(nargin>6)
+if(nargin>7)
   START=varargin{1};  % sec
   if(ischar(START))  START=str2num(START);  end
 end
-if(nargin>7)
+if(nargin>8)
   STOP=varargin{2};  % sec
   if(ischar(STOP))   STOP=str2num(STOP);    end
 end
 
-SAVE_MT=1;
+VERSION=1;
+CHUNK2=10;  % sec
 
 SUBSAMPLE=1;
 NWORKERS=matlabpool('size');
@@ -40,7 +41,7 @@ if(NWORKERS==0)  NWORKERS=1;  end
 FS=FS/SUBSAMPLE;
 
 NFFT=2^nextpow2(NFFT_SEC*FS);  % ticks
-CHUNK=round(256*1000/NFFT);  % NFFT/2 ticks
+CHUNK1=round(256*1000/NFFT);  % NFFT/2 ticks
 
 FIRST_MT=nan;
 LAST_MT=nan;
@@ -62,6 +63,7 @@ MT_PARAMS.fpass=[0 FS/2];
 
 f=(0:(NFFT/2))*FS/NFFT;
 df=f(2)-f(1);
+chunk2=round(CHUNK2*FS/(NFFT/2));
 
 [p n e]=fileparts(FILEIN);
 DIR_OUT=fullfile(p);
@@ -91,13 +93,16 @@ for i=1:length(FILEINs)
   end
 end
 
-dd=zeros(length(fid),NFFT/2*(NWORKERS*CHUNK+1));
+dd=zeros(length(fid),NFFT/2*(NWORKERS*CHUNK1+1));
 for i=1:length(fid)
   dd(i,(end-NFFT/2+1):end)=fread(fid(i),NFFT/2,'float32',4*(SUBSAMPLE-1));
 end
 
-MT=nan*zeros(1000,4);  % time, freq, amp, channel
-MTidx=1;
+fid_out=fopen([FILEIN '-' FILEOUT '.mtbp'],'w');
+fwrite(fid_out,uint8([VERSION SUBSAMPLE CHUNK2]),'uint8');
+fwrite(fid_out,uint32([FS NFFT]),'uint32');
+fwrite(fid_out,uint16([NW K]),'uint16');
+fwrite(fid_out,[PVAL df],'double');
 
 t_now=0;
 tic;
@@ -112,50 +117,48 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
 
   dd(:,1:(NFFT/2))=dd(:,(end-NFFT/2+1):end);
   for i=1:length(fid)
-    [tmp count]=fread(fid(i),NFFT/2*NWORKERS*CHUNK,'float32',4*(SUBSAMPLE-1));
-    if(count<NFFT/2*NWORKERS*CHUNK)
-      tmp=[tmp; zeros(NFFT/2*NWORKERS*CHUNK-count,1)];
+    [tmp count]=fread(fid(i),NFFT/2*NWORKERS*CHUNK1,'float32',4*(SUBSAMPLE-1));
+    if(count<NFFT/2*NWORKERS*CHUNK1)
+      tmp=[tmp; zeros(NFFT/2*NWORKERS*CHUNK1-count,1)];
     end
     dd(i,(NFFT/2+1):end)=tmp;
   end
 
-  idx=cell(NCHANNELS,CHUNK,NWORKERS);
+  idx=cell(NCHANNELS,CHUNK1,NWORKERS);
   parfor i=1:NWORKERS
-    for j=1:CHUNK
-      [F,p,f,sig,sd] = ftestc(dd(:,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1))',MT_PARAMS,PVAL/NFFT,'n');
+    for j=1:CHUNK1
+      [F,p,f,sig,sd] = ftestc(dd(:,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK1-1))',MT_PARAMS,PVAL/NFFT,'n');
       for l=1:NCHANNELS
         tmp=1+find(F(2:end,l)'>sig);
         tmp2=[];
         for m=1:length(tmp)
-          [tmp2(m,1) tmp2(m,2)]=brown2_puckette(dd(l,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1)),f,tmp(m),FS);
+          [tmp2(m,1) tmp2(m,2)]=brown2_puckette(dd(l,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK1-1)),f,tmp(m),FS);
         end
         idx{l,j,i}=tmp2;
       end
     end
   end
-  idx=reshape(idx,NCHANNELS,NWORKERS*CHUNK);
+  idx=reshape(idx,NCHANNELS,NWORKERS*CHUNK1);
   [sub1,sub2]=ind2sub(size(idx),find(~cellfun(@isempty,idx)));
-  for i=1:length(sub1)
-    tmp=idx{sub1(i),sub2(i)};
-    for j=1:size(tmp,1)
-      if(size(MT,1)<MTidx)  MT=[MT; nan*zeros(1000,4)];  end
-      MT(MTidx,:)=[t_now+sub2(i) tmp(j,1) tmp(j,2) sub1(i)];
-      MTidx=MTidx+1;
+  if(length(sub1)>0)
+    for i=1:length(sub1)
+      tmp=idx{sub1(i),sub2(i)};
+      for j=1:size(tmp,1)
+        fwrite(fid_out,[t_now+sub2(i) tmp(j,1) tmp(j,2) sub1(i)],'double');
+      end
     end
+  else
   end
 
-  t_now_sec=t_now_sec+NFFT/2/FS*NWORKERS*CHUNK;
-  t_now=t_now+NWORKERS*CHUNK;
+  t_now_sec=t_now_sec+NFFT/2/FS*NWORKERS*CHUNK1;
+  t_now=t_now+NWORKERS*CHUNK1;
 end
 
-find(isnan(MT(:,1)));
-MT=MT(1:(ans(1)-1),:);
-
+fwrite(fid_out,'Z','uchar');
+fclose(fid_out);
 for i=1:length(FILEINs)
   fclose(fid(i));
 end
-
-save([FILEIN '_MTBP' num2str(NFFT) '.mat'],'MT','FS','NFFT','NW','K','PVAL','df','-v7.3');
 
 tstop=toc(tstart);
 disp(['Run time was ' num2str(tstop/60,3) ' minutes.']);
