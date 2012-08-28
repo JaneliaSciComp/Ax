@@ -89,5 +89,6 @@ do
   do
 #    echo $j
     qsub -N "$job_name-$j" -pe batch 8 -b y -j y -cwd -o "$dir_name/$job_name-$j.log" -V ./cluster2.sh "\"$i\"" "\"$j\"" "\"${FS[j]}\"" "\"${NFFT[j]}\"" "\"${NW[j]}\"" "\"${K[j]}\"" "\"${PVAL[j]}\"" "\"$3\"" "\"$4\""
+    sleep 1
   done
 done
