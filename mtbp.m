@@ -163,6 +163,14 @@ end
 tstop=toc(tstart);
 disp(['Run time was ' num2str(tstop/60,3) ' minutes.']);
 
+if(exist('matlabpool')==2 && matlabpool('size')>0)
+  try
+    matlabpool close
+  catch
+    disp('WARNING: could not close matlab pool.  exiting anyway.');
+  end
+end
+
 
 function [freq,amp]=brown2_puckette(x,f,k,fs)
 
