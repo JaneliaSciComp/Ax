@@ -65,11 +65,13 @@ f=(0:(NFFT/2))*FS/NFFT;
 df=f(2)-f(1);
 chunk2=round(CHUNK2*FS/(NFFT/2));
 
+REMAP=[1:4 6:8];  % blegh
+
 [p n e]=fileparts(FILEIN);
 DIR_OUT=fullfile(p);
 FILEINs=dir([FILEIN '.ch*']);
 [tmp{1:length(FILEINs)}]=deal(FILEINs.name);
-tmp=cellfun(@(x) regexp(x,'\.ch[1-4]'), tmp,'uniformoutput',false);
+tmp=cellfun(@(x) regexp(x,'\.ch[1-4,6-8]'), tmp,'uniformoutput',false);  % blegh
 FILEINs=FILEINs(~cellfun(@isempty,tmp));
 if(length(FILEINs)==0)
   error(['can''t find file ''' FILEIN '.ch*''']);
@@ -144,7 +146,7 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
     for i=1:length(sub1)
       tmp=idx{sub1(i),sub2(i)};
       for j=1:size(tmp,1)
-        fwrite(fid_out,[t_now+sub2(i) tmp(j,1) tmp(j,2) sub1(i)],'double');
+        fwrite(fid_out,[t_now+sub2(i) tmp(j,1) tmp(j,2) REMAP(sub1(i))],'double');  % blegh
       end
     end
   else

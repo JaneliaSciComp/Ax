@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <deployment-project plugin="plugin.deploytool" plugin-version="1.0">
-  <configuration target="target.standalone" target-name="Standalone Application" name="mtbp" location="/home/arthurb/projects/egnor/mtbp" file="/home/arthurb/projects/egnor/mtbp/mtbp.prj" build-checksum="2509472753">
+  <configuration target="target.standalone" target-name="Standalone Application" name="mtbp" location="/home/arthurb/projects/egnor/mtbp" file="/home/arthurb/projects/egnor/mtbp/mtbp.prj" build-checksum="4263485721">
     <param.project.name>/home/arthurb/projects/egnor/mtbp/mtbp.prj</param.project.name>
     <param.target.type>Standalone Application</param.target.type>
     <param.appname>mtbp</param.appname>
@@ -73,6 +73,97 @@
     <matlab>
       <root>/home/arthurb/bin/matlab2012a</root>
       <path>
+        <directory>/home/arthurb/matlab/chronux</directory>
+        <directory>/home/arthurb/matlab/chronux/dataio</directory>
+        <directory>/home/arthurb/matlab/chronux/dataio/HowToReadNexFilesInMatlab</directory>
+        <directory>/home/arthurb/matlab/chronux/dataio/ReadingPLXandDDTfilesinMatlab</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/dataio</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/dataio/HowToReadNexFilesInMatlab</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/dataio/ReadingPLXandDDTfilesinMatlab</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/fly_track</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/fly_track/FAnalyze</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/fly_track/FAnalyze/functions</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/fly_track/FTrack</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/fly_track/FTrack/functions</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/locfit</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/locfit/Book</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/locfit/Neuro</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/locfit/m</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/old</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/old/tutorial</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spectral_analysis</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spectral_analysis/continuous</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spectral_analysis/helper</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spectral_analysis/hybrid</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spectral_analysis/plots</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spectral_analysis/pointbinned</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spectral_analysis/pointtimes</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spectral_analysis/specscope</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spectral_analysis/statistical_tests</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spikesort</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spikesort/graphics</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spikesort/helper</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spikesort/ssg</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spikesort/utility</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spikesort/utility/datatools</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spikesort/utility/datatypes</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spikesort/utility/graphicstyles</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spikesort/utility/matlabtools</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spikesort/utility/plottypes</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/spikesort/utility/uitools</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/test</directory>
+        <directory>/home/arthurb/matlab/chronux/documentation/chronux_2_00/wave_browser</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/FAnalyze</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/FAnalyze/documentation</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/FAnalyze/documentation/TeXFiles</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/FAnalyze/functions</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/FTrack</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/FTrack/documentation</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/FTrack/documentation/TeXFiles</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/FTrack/functions</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/videoIO</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/videoIO/videoIO_2006a</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/videoIO/videoIO_2006b</directory>
+        <directory>/home/arthurb/matlab/chronux/fly_track/videoIO/videoIO_2007a</directory>
+        <directory>/home/arthurb/matlab/chronux/locfit</directory>
+        <directory>/home/arthurb/matlab/chronux/locfit/Book</directory>
+        <directory>/home/arthurb/matlab/chronux/locfit/Neuro</directory>
+        <directory>/home/arthurb/matlab/chronux/locfit/Source</directory>
+        <directory>/home/arthurb/matlab/chronux/locfit/m</directory>
+        <directory>/home/arthurb/matlab/chronux/locfit/mex</directory>
+        <directory>/home/arthurb/matlab/chronux/locfit/mex/dll</directory>
+        <directory>/home/arthurb/matlab/chronux/old</directory>
+        <directory>/home/arthurb/matlab/chronux/old/tutorial</directory>
+        <directory>/home/arthurb/matlab/chronux/spectral_analysis</directory>
+        <directory>/home/arthurb/matlab/chronux/spectral_analysis/continuous</directory>
+        <directory>/home/arthurb/matlab/chronux/spectral_analysis/helper</directory>
+        <directory>/home/arthurb/matlab/chronux/spectral_analysis/hybrid</directory>
+        <directory>/home/arthurb/matlab/chronux/spectral_analysis/plots</directory>
+        <directory>/home/arthurb/matlab/chronux/spectral_analysis/pointbinned</directory>
+        <directory>/home/arthurb/matlab/chronux/spectral_analysis/pointtimes</directory>
+        <directory>/home/arthurb/matlab/chronux/spectral_analysis/specscope</directory>
+        <directory>/home/arthurb/matlab/chronux/spectral_analysis/statistical_tests</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/graphics</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/helper</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/mex</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/sampledata</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/ssg</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/utility</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/utility/datatools</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/utility/datatypes</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/utility/graphicstyles</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/utility/matlabtools</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/utility/plottypes</directory>
+        <directory>/home/arthurb/matlab/chronux/spikesort/utility/uitools</directory>
+        <directory>/home/arthurb/matlab/chronux/test</directory>
+        <directory>/home/arthurb/matlab/chronux/wave_browser</directory>
+        <directory>/home/arthurb/matlab/chronux/wave_browser/html</directory>
+        <directory>/home/arthurb/projects/stern/Fly_Song_Segmenter/chronux</directory>
+        <directory>/home/arthurb/projects/stern/Fly_Song_Segmenter</directory>
         <directory>/home/arthurb/Documents/MATLAB</directory>
         <directory>/home/arthurb/matlab</directory>
         <directory>${MATLAB_ROOT}/toolbox/matlab/optimfun</directory>

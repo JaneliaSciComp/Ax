@@ -1,18 +1,21 @@
-%function mtbp2(type,merge,datapath)
+%function mtbp2(type,merge,channels,datapath)
 %
 %type='R' is for rejection calls, 'US' for ultrasonic
 %set merge to the overlap criterion, in seconds, below which vocalizations
 %  are combined, or to [] to not combine
+%channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
 %datapath can be to a folder or to a set of files.
 %for the latter, omit the .ch* suffix
 %
-%mtbp2('US',[],'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-%mtbp2('R',0.005,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-%mtbp2('R',0.005,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1');
+%mtbp2('US',[],1:4,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+%mtbp2('R',0.005,1,4:'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+%mtbp2('R',0.005,1,4:'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1');
+%mtbp2('US',0.005,1:4,'/groups/egnor/egnorlab/for_ben/kelly');
+%mtbp2('US',0.005,6,'/groups/egnor/egnorlab/for_ben/kelly');
 
-function mtbp2(type,merge,datapath)
+function mtbp2(type,merge,channels,datapath)
 
-if((nargin~=3) || ~ismember(upper(type),{'R' 'US'}))
+if((nargin~=4) || ~ismember(upper(type),{'R' 'US'}))
   error('invalid args');
 end
 
@@ -29,24 +32,26 @@ if(~isempty(tmp))
     end
   end
   parfor i=1:length(datafiles)
-    mtbp2_guts(i,type,merge,fullfile(datapath,datafiles{i}));
+    mtbp2_guts(i,type,merge,channels,fullfile(datapath,datafiles{i}));
   end
 else
   tmp=dir([datapath '*.mtbp']);
   if(~isempty(tmp))
-    mtbp2_guts(0,type,merge,datapath);
+    mtbp2_guts(0,type,merge,channels,datapath);
   else
     error(['can''t find ' datapath]);
   end
 end
 
 
-function mtbp2_guts(num,type,merge,filename)
+function mtbp2_guts(num,type,merge,channels,filename)
 
 GROUNDTRUTH=0;
 SAVE_WAV=0;
 SAVE_PNG=0;
 MERGE=merge;
+CHANNELS=channels;  if(isempty(CHANNELS))  CHANNELS=[1:4 6:8];  end
+
 
 switch(upper(type))
   case 'US'   % ultrasonic
@@ -117,7 +122,7 @@ fa_num=1;
 CHUNK3=1024;
 
 if(GROUNDTRUTH)
-  groundtruth=load([filename '.txt']);
+  groundtruth=load([filename '.gnd']);
   groundtruth=groundtruth(:,2:3);
   groundtruth=sortrows(groundtruth,1);
   groundtruth=groundtruth./FS;
@@ -145,7 +150,7 @@ while ~eof
         tmp=[tmp; foo'];
         idx=find(tmp(:,1)>chunk_curr*chunk_len(i),1);
         if(~isempty(idx))
-          idx2=find((tmp(1:(idx-1),2)>=F_LOW) & (tmp(1:(idx-1),2)<=F_HIGH));
+          idx2=find((tmp(1:(idx-1),2)>=F_LOW) & (tmp(1:(idx-1),2)<=F_HIGH) & ismember(tmp(1:(idx-1),4),CHANNELS));
           data(i).MT_next=tmp(idx2,:);
           data(i).MT_next(:,1)=data(i).MT_next(:,1)-(chunk_curr-1)*chunk_len(i);
           fseek(fid(i),-(size(tmp,1)-idx+1)*4*8,'cof');
@@ -329,9 +334,15 @@ while ~eof
         sidx=sidx+1;
       end
     end
-    misses=find(groundtruth(1:min([gidx size(groundtruth,1)]),3)==0);
-    false_alarms=find(skytruth(:,3)==0);
-    hits=setdiff(1:min([gidx size(groundtruth,1)]),misses);
+    if ~eof
+      misses=find(groundtruth(1:min([gidx-1 size(groundtruth,1)]),3)==0);
+      false_alarms=find(skytruth(:,3)==0);
+      hits=setdiff(1:min([gidx-1 size(groundtruth,1)]),misses);
+    else
+      misses=find(groundtruth(1:size(groundtruth,1),3)==0);
+      false_alarms=find(skytruth(:,3)==0);
+      hits=setdiff(1:size(groundtruth,1),misses);
+    end
   end
 
   %plot
@@ -377,28 +388,28 @@ while ~eof
       while voc_num<=min([20 size(skytruth,1)])
         left=skytruth(voc_num,1);
         right=skytruth(voc_num,2);
-        mtbp2_print(voc_num,left,right,'voc',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a);
+        mtbp2_print(voc_num,left,right,'voc',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
         voc_num=voc_num+1;
       end
     else
       while hit_num<=min([20 length(hits)])
         left =min([groundtruth(hits(hit_num),1) skytruth(groundtruth(hits(hit_num),3),1)]);
         right=max([groundtruth(hits(hit_num),2) skytruth(groundtruth(hits(hit_num),3),2)]);
-        mtbp2_print(hit_num,left,right,'hit',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a);
+        mtbp2_print(hit_num,left,right,'hit',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
         hit_num=hit_num+1;
       end
 
       while miss_num<=min([100 size(misses,1)])
         left=groundtruth(misses(miss_num),1);
         right=groundtruth(misses(miss_num),2);
-        mtbp2_print(miss_num,left,right,'miss',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a);
+        mtbp2_print(miss_num,left,right,'miss',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
         miss_num=miss_num+1;
       end
 
       while fa_num<=min([100 size(false_alarms,1)])
         left=skytruth(false_alarms(fa_num),1);
         right=skytruth(false_alarms(fa_num),2);
-        mtbp2_print(fa_num,left,right,'false_alarm',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a);
+        mtbp2_print(fa_num,left,right,'false_alarm',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
         fa_num=fa_num+1;
       end
     end
@@ -424,21 +435,21 @@ else
 end
 
 tmp=[skytruth(:,1:2) skytruth(:,4:5)];
-save([filename '.voc'],'tmp','-ascii');
-save([filename '.fc'],'freqtruth');
+save([filename '.voc' sprintf('%d',channels)],'tmp','-ascii');
+save([filename '.fc' sprintf('%d',channels)],'freqtruth');
 if(GROUNDTRUTH)
   tmp=groundtruth(misses,1:2);
-  save([filename '.miss'],'tmp','-ascii');
+  save([filename '.miss' sprintf('%d',channels)],'tmp','-ascii');
   tmp=[skytruth(false_alarms,1:2) skytruth(false_alarms,4:5)];
-  save([filename '.fa'],'tmp','-ascii');
+  save([filename '.fa' sprintf('%d',channels)],'tmp','-ascii');
 end
 
 
 
-function mtbp2_print(i,left,right,type,filename,FS,NFFT,SAVE_WAV,SAVE_PNG,b,a)
+function mtbp2_print(i,left,right,type,filename,FS,NFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS)
 
 tmp=[];  p=[];
-for j=1:4
+for j=CHANNELS
   fid=fopen([filename '.ch' num2str(j)],'r');
   fseek(fid,round(4*(round((left-0.025)*FS))),-1);
   tmp=fread(fid,round((right-left+0.050)*FS),'float32');
@@ -460,6 +471,7 @@ idx=find(tmp>tmp3);  tmp(idx)=tmp3;
 h=surf(t+left-0.025,f-f(2)/2,tmp,'EdgeColor','none');
 uistack(h,'bottom');
 colormap(gray);
+axis tight;
 set(gca,'xlim',[left right]+[-0.025 0.025]);
 title([type ' #' num2str(i)]);
 drawnow;
