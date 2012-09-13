@@ -1,21 +1,23 @@
-%function mtbp2(type,merge,channels,datapath)
+%function mtbp2(type,merge_time,merge_freq,channels,datapath)
 %
 %type='R' is for rejection calls, 'US' for ultrasonic
-%set merge to the overlap criterion, in seconds, below which vocalizations
+%set merge_time to the overlap criterion, in seconds, below which vocalizations
 %  are combined, or to [] to not combine
+%set merge_freq to 1 to collapse harmonically related syllables, 0 otherwise
+%  parameters for merging freqs are in the code:  MERGE_FREQ_[OVERLAP,RATIO,FRACTION]
 %channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
 %datapath can be to a folder or to a set of files.
 %for the latter, omit the .ch* suffix
 %
-%mtbp2('US',[],1:4,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-%mtbp2('R',0.005,1,4:'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-%mtbp2('R',0.005,1,4:'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1');
-%mtbp2('US',0.005,1:4,'/groups/egnor/egnorlab/for_ben/kelly');
-%mtbp2('US',0.005,6,'/groups/egnor/egnorlab/for_ben/kelly');
+%mtbp2('US',[],0,1:4,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+%mtbp2('R',0.005,0,1,4:'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+%mtbp2('R',0.005,0,1,4:'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1');
+%mtbp2('US',0.005,0,1:4,'/groups/egnor/egnorlab/for_ben/kelly');
+%mtbp2('US',0.005,0,6,'/groups/egnor/egnorlab/for_ben/kelly');
 
-function mtbp2(type,merge,channels,datapath)
+function mtbp2(type,merge_time,merge_freq,channels,datapath)
 
-if((nargin~=4) || ~ismember(upper(type),{'R' 'US'}))
+if((nargin~=5) || ~ismember(upper(type),{'R' 'US'}))
   error('invalid args');
 end
 
@@ -32,24 +34,29 @@ if(~isempty(tmp))
     end
   end
   parfor i=1:length(datafiles)
-    mtbp2_guts(i,type,merge,channels,fullfile(datapath,datafiles{i}));
+  %for i=1:length(datafiles)
+    mtbp2_guts(i,type,merge_time,merge_freq,channels,fullfile(datapath,datafiles{i}));
   end
 else
   tmp=dir([datapath '*.mtbp']);
   if(~isempty(tmp))
-    mtbp2_guts(0,type,merge,channels,datapath);
+    mtbp2_guts(0,type,merge_time,merge_freq,channels,datapath);
   else
     error(['can''t find ' datapath]);
   end
 end
 
 
-function mtbp2_guts(num,type,merge,channels,filename)
+function mtbp2_guts(num,type,merge_time,merge_freq,channels,filename)
 
 GROUNDTRUTH=0;
 SAVE_WAV=0;
 SAVE_PNG=0;
-MERGE=merge;
+MERGE_TIME=merge_time;
+MERGE_FREQ=merge_freq;
+MERGE_FREQ_OVERLAP=0.9;   % one syl overlaping the other by > 90%
+MERGE_FREQ_RATIO=0.1;     % within 10% of being a harmonic
+MERGE_FREQ_FRACTION=0.9;  % for >90% of the overlap
 CHANNELS=channels;  if(isempty(CHANNELS))  CHANNELS=[1:4 6:8];  end
 
 
@@ -114,7 +121,7 @@ FS=data(1).FS;
 chunk_len=round(data(1).CHUNK2*FS/(maxNFFT/2))*maxNFFT./[data.NFFT];  % windows
 skytruth=[];
 freqtruth={};
-MERGE=MERGE*FS/minNFFT*2;
+MERGE_TIME=MERGE_TIME*FS/minNFFT*2;
 voc_num=1;
 hit_num=1;
 miss_num=1;
@@ -266,8 +273,8 @@ while ~eof
     end
   end
 
-  %merge nearby syllables...
-  if(~isempty(MERGE))
+  %merge harmonically related syllables...
+  if(~isempty(MERGE_FREQ))
     syls3=ones(1,length(syls2));
     for i=1:(length(syls2)-1)
       if(isempty(syls.PixelIdxList{i}))  continue;  end
@@ -276,8 +283,18 @@ while ~eof
         flag=0;
         for j=(i+1):length(syls2)
           if(isempty(syls.PixelIdxList{j}))  continue;  end
-          if(((sum(syls2(i).BoundingBox([1 3]))+MERGE) > syls2(j).BoundingBox(1)) &&...
-             ((sum(syls2(j).BoundingBox([1 3]))+MERGE) > syls2(i).BoundingBox(1)))
+          doit=false;
+          for k=1:length(freq_contour{i})
+            [c,ii,jj]=intersect(freq_contour{i}{k}(:,1),freq_contour{j}{1}(:,1));
+            if((length(c)/size(freq_contour{i}{k},1)<MERGE_FREQ_OVERLAP) && ...
+               (length(c)/size(freq_contour{j}{1},1)<MERGE_FREQ_OVERLAP))
+              continue;
+            end
+            doit=doit | ...
+                sum(sum(abs((freq_contour{i}{k}(ii,2)./freq_contour{j}{1}(jj,2))*[1/3 1/2 2 3]-1)<MERGE_FREQ_RATIO)...
+                >(MERGE_FREQ_FRACTION*length(c)));
+          end
+          if(doit)
             flag=1;
             syls.PixelIdxList{i}=[syls.PixelIdxList{i}; syls.PixelIdxList{j}];
             syls.PixelIdxList{j}=[];
@@ -304,6 +321,46 @@ while ~eof
     syls.PixelIdxList={syls.PixelIdxList{idx}};
     syls2=regionprops(syls,'basic');
     freq_contour={freq_contour{idx}};
+  end
+
+  %merge temporally nearby syllables...
+  if(~isempty(MERGE_TIME))
+    syls3=ones(1,length(syls2));
+    for i=1:(length(syls2)-1)
+      if(isempty(syls.PixelIdxList{i}))  continue;  end
+      flag=1;
+      while(flag)
+        flag=0;
+        for j=(i+1):length(syls2)
+          if(isempty(syls.PixelIdxList{j}))  continue;  end
+          if(((sum(syls2(i).BoundingBox([1 3]))+MERGE_TIME) > syls2(j).BoundingBox(1)) &&...
+             ((sum(syls2(j).BoundingBox([1 3]))+MERGE_TIME) > syls2(i).BoundingBox(1)))
+            flag=1;
+            syls.PixelIdxList{i}=[syls.PixelIdxList{i}; syls.PixelIdxList{j}];
+            syls.PixelIdxList{j}=[];
+            syls2(i).BoundingBox(1)=...
+                min([syls2(i).BoundingBox(1) syls2(j).BoundingBox(1)]);
+            syls2(i).BoundingBox(2)=...
+                min([syls2(i).BoundingBox(2) syls2(j).BoundingBox(2)]);
+            syls2(i).BoundingBox(3)=...
+                max([sum(syls2(i).BoundingBox([1 3])) sum(syls2(j).BoundingBox([1 3]))])-...
+                syls2(i).BoundingBox(1);
+            syls2(i).BoundingBox(4)=...
+                max([sum(syls2(i).BoundingBox([2 4])) sum(syls2(j).BoundingBox([2 4]))])-...
+                syls2(i).BoundingBox(2);
+            syls3(i)=syls3(i)+syls3(j);
+            syls3(j)=0;
+            freq_contour{i}={freq_contour{i}{:} freq_contour{j}{:}};
+            freq_contour{j}=[];
+          end
+        end
+      end
+    end
+    %idx=find(syls3>=NHARM);
+    %syls.NumObjects=length(idx);
+    %syls.PixelIdxList={syls.PixelIdxList{idx}};
+    %syls2=regionprops(syls,'basic');
+    %freq_contour={freq_contour{idx}};
   end
   tmp=reshape([syls2.BoundingBox],4,length(syls2))';
   %%tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
@@ -385,7 +442,7 @@ while ~eof
 
     % plot hits, misses and false alarms separately
     if(~GROUNDTRUTH)
-      while voc_num<=min([20 size(skytruth,1)])
+      while voc_num<=min([200 size(skytruth,1)])
         left=skytruth(voc_num,1);
         right=skytruth(voc_num,2);
         mtbp2_print(voc_num,left,right,'voc',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
@@ -451,6 +508,7 @@ function mtbp2_print(i,left,right,type,filename,FS,NFFT,SAVE_WAV,SAVE_PNG,b,a,CH
 tmp=[];  p=[];
 for j=CHANNELS
   fid=fopen([filename '.ch' num2str(j)],'r');
+  if(fid<0)  continue;  end
   fseek(fid,round(4*(round((left-0.025)*FS))),-1);
   tmp=fread(fid,round((right-left+0.050)*FS),'float32');
   fclose(fid);
