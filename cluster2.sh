@@ -12,9 +12,12 @@ if [ -d /scratch/$USER ]
     export MCR_CACHE_ROOT=~/mcr_cache_root.$JOB_ID
 fi
 
-./mtbp/distrib/run_mtbp.sh /usr/local/matlab-2012a $1 $2 $3 $4 $5 $6 $7 $8 $9
-
-if [ -d /scratch/$USER ]
+if [ -d MCR_CACHE_ROOT ]
   then
+    echo Deleting pre-existing MCR_CACHE_ROOT
     rm -rf $MCR_CACHE_ROOT
 fi
+
+./mtbp/distrib/run_mtbp.sh /usr/local/matlab-2012a $1 $2 $3 $4 $5 $6 $7 $8 $9
+
+rm -rf $MCR_CACHE_ROOT
