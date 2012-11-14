@@ -1,41 +1,43 @@
 #!/bin/bash
 
 # cd to folder containing cluster.sh and then execute:
-#   ./cluster.sh  <R|US> full_path_to_data  [start_sec]  [stop_sec]
-# use R for rejection calls, and US for ultrasonic vocalizations
+#   ./cluster.sh  full_path_to_parameters  full_path_to_data
 # data can either be a folder of sessions or a single session's base filename
 # for example
-#   ./cluster.sh  US /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/
-#   ./cluster.sh  US /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1
+#   ./cluster.sh  ./ultrasonic_parameters.m  /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/
+#   ./cluster.sh  ./ultrasonic_parameters.m  /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1
 
 # FS, NW, K, PVAL, and NFFT specify the parameters to each call of mtbp().
-# if any are a scalar the same value is used for each call.
+# if any are a scalar the same value is used for each call.  those which are
+# arrays must have the same length.
 
 if [ $# -ne 2 ]
 then
-  echo not enough arguments
+  echo invalid arguments
   exit
 fi
 
-if [ $1 == 'US' ] ; then
-  FS=450450;  # Hz
-  #NW=15
-  #K=29
-  NW=22
-  K=43
-  PVAL=0.01
-  NFFT=(0.001 0.0005 0.00025)  # sec (rounds up to next power of 2 tics)
-  #NFFT=(0.00025)  # sec (rounds up to next power of 2 tics)
-elif [ $1 == 'R' ]; then
-  FS=450450;  # Hz
-  NW=18
-  K=24
-  PVAL=0.01
-  NFFT=(0.009 0.0045 0.0022)  # sec (rounds up to next power of 2 tics)
-else
-  echo first argument must either be R or US
-  exit
-fi
+eval $( sed "s/\[/\\(/g" $1 | sed "s/\]/\\)/g" )
+
+#if [ $1 == 'US' ] ; then
+#  FS=450450;  # Hz
+#  #NW=15
+#  #K=29
+#  NW=22
+#  K=43
+#  PVAL=0.01
+#  NFFT=(0.001 0.0005 0.00025)  # sec (rounds up to next power of 2 tics)
+#  #NFFT=(0.00025)  # sec (rounds up to next power of 2 tics)
+#elif [ $1 == 'R' ]; then
+#  FS=450450;  # Hz
+#  NW=18
+#  K=24
+#  PVAL=0.01
+#  NFFT=(0.009 0.0045 0.0022)  # sec (rounds up to next power of 2 tics)
+#else
+#  echo first argument must either be R or US
+#  exit
+#fi
 
 # get maximum length of params
 tmp=(${#FS[@]} ${#NW[@]} ${#K[@]} ${#PVAL[@]} ${#NFFT[@]})
@@ -67,11 +69,11 @@ if [ ${#NFFT[@]} -lt $tmp ] ; then
   do NFFT[i]=${NFFT[0]}; done
 fi
 
-#echo ${FS[@]}
-#echo ${NW[@]}
-#echo ${K[@]}
-#echo ${PVAL[@]}
-#echo ${NFFT[@]}
+echo ${FS[@]}
+echo ${NW[@]}
+echo ${K[@]}
+echo ${PVAL[@]}
+echo ${NFFT[@]}
 
 # launch one instance of mtbp() per set of params
 if [ -d $2 ] ; then

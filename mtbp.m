@@ -1,14 +1,28 @@
-% function mtbp(FILEIN,FILEOUT,FS,NFFT_SEC,NW,K,PVAL)
-% function mtbp(FILEIN,FILEOUT,FS,NFFT_SEC,NW,K,PVAL,START,STOP)
+% function mtbp(FILEIN,FILEOUT,params_file)
+% function mtbp(FILEIN,FILEOUT,params_file,START,STOP)
+% function mtbp(FILEIN,FILEOUT,FS,NFFT,NW,K,PVAL)
+% function mtbp(FILEIN,FILEOUT,FS,NFFT,NW,K,PVAL,START,STOP)
+%
+% FS: sampling rate in Hertz
+% NFFT: FFT window size in seconds, rounds up to the next power of 2 tics
+% NW: multi-taper time-bandwidth product
+% K: number of tapers
+% PVAL:  F-test p-val threshold
+% START,STOP:  optional time range, in seconds
 %
 % mtbp('urine',1,200e3,0.001,15,29,0.01);
 % mtbp('groundtruth',1,450450,0.001,15,29,0.01,0,30);
 
-function mtbp(FILEIN,FILEOUT,FS,NFFT_SEC,NW,K,PVAL,varargin)
+%function mtbp(FILEIN,FILEOUT,FS,NFFT,NW,K,PVAL,varargin)
+function mtbp(FILEIN,FILEOUT,varargin)
+
+if((nargin~=3)&&(nargin~=5)&&(nargin~=7)&&(nargin~=9))
+  error('invalid args');
+end
 
 tstart=tic;
 
-if(exist('matlabpool')==2 && matlabpool('size')==0)
+if((exist('matlabpool')==2) && (matlabpool('size')==0))
   try
     matlabpool open
   catch
@@ -16,19 +30,32 @@ if(exist('matlabpool')==2 && matlabpool('size')==0)
   end
 end
 
+if(nargin<6)
+  run(varargin{1});
+else
+  FS=varargin{1};
+  NFFT=varargin{2};
+  NW=varargin{3};
+  K=varargin{4};
+  PVAL=varargin{5};
+end
+if((nargin==5)||(nargin==9))
+  START=varargin{6};
+  STOP=varargin{7};
+end
+
 if(ischar(FS))        FS=str2num(FS);              end
-if(ischar(NFFT_SEC))  NFFT_SEC=str2num(NFFT_SEC);  end
+if(ischar(NFFT))  NFFT=str2num(NFFT);  end
 if(ischar(NW))        NW=str2num(NW);              end
 if(ischar(K))         K=str2num(K);                end
 if(ischar(PVAL))      PVAL=str2num(PVAL);          end
-
-if(nargin>7)
-  START=varargin{1};  % sec
-  if(ischar(START))  START=str2num(START);  end
+if((nargin==5)||(nargin==9))
+  if(ischar(START))   START=str2num(START);        end
+  if(ischar(STOP))    STOP=str2num(STOP);          end
 end
-if(nargin>8)
-  STOP=varargin{2};  % sec
-  if(ischar(STOP))   STOP=str2num(STOP);    end
+
+if(length(NFFT)>1)
+  error('multiple NFFTs not supported when calling mtbp() from the matlab command line');
 end
 
 VERSION=1;
@@ -40,7 +67,7 @@ if(NWORKERS==0)  NWORKERS=1;  end
 
 FS=FS/SUBSAMPLE;
 
-NFFT=2^nextpow2(NFFT_SEC*FS);  % ticks
+NFFT=2^nextpow2(NFFT*FS);  % convert to ticks
 CHUNK1=round(256*1000/NFFT);  % NFFT/2 ticks
 
 FIRST_MT=nan;
@@ -165,7 +192,7 @@ end
 tstop=toc(tstart);
 disp(['Run time was ' num2str(tstop/60,3) ' minutes.']);
 
-if(exist('matlabpool')==2 && matlabpool('size')>0)
+if((exist('matlabpool')==2) && (matlabpool('size')>0))
   try
     matlabpool close
   catch

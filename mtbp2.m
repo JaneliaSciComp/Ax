@@ -1,27 +1,84 @@
-%function mtbp2(type,merge_time,merge_freq,channels,datapath)
+%function mtbp2(data_path, channels, obj_size, conv_size, f_low, f_high, nseg, ...
+%    merge_time, merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction)
+%function mtbp2(data_path, params_file)
 %
-%type='R' is for rejection calls, 'US' for ultrasonic
-%set merge_time to the overlap criterion, in seconds, below which vocalizations
-%  are combined, or to [] to not combine
-%set merge_freq to 1 to collapse harmonically related syllables, 0 otherwise
-%  parameters for merging freqs are in the code:  MERGE_FREQ_[OVERLAP,RATIO,FRACTION]
+%data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
 %channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
-%datapath can be to a folder or to a set of files.
-%for the latter, omit the .ch* suffix
+%obj_size is in pixels
+%conv_size is [height_freq width_time] in pixels, each must be odd
+%f_low, f_high are in Hz
+%nseg is the minimum number of merged segements a vocalization must contain
+%merge_time is the overlap criterion, in seconds, below which vocalizations
+%  are combined;  use [] to not combine
+%set merge_freq to 1 to collapse harmonically related syllables, 0 otherwise
+%merge_freq_overlap is the fraction in time two segments must overlap
+%merge_freq_ratio is the tolerance in frequency ratio two segments must be within
+%merge_freq_fraction is the fraction of the overlap the must be within the tolerance
 %
+%for ultrasonic:
+%mtbp2('/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/',...
+%    1:4, 1500, [15 7], 20e3, 120e3, 1, [], 0, 0.9, 0.1, 0.9);
+%mtbp2('/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/', 'ultrasonic_params.m');
+%
+%for rejection:
+%mtbp2('/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/',...
+%    1:4, 1000, [15 7], 1e3, 20e3, 3, [], 0, 0.9, 0.1, 0.9);
+%mtbp2('/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/', rejection_params.m);
+
+%mtbp2('US',[],0,1:4,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 %mtbp2('US',[],0,1:4,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 %mtbp2('R',0.005,0,1,4:'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 %mtbp2('R',0.005,0,1,4:'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1');
 %mtbp2('US',0.005,0,1:4,'/groups/egnor/egnorlab/for_ben/kelly');
 %mtbp2('US',0.005,0,6,'/groups/egnor/egnorlab/for_ben/kelly');
 
-function mtbp2(type,merge_time,merge_freq,channels,datapath)
+%switch(upper(type))
+%  case 'US'   % ultrasonic
+%    OBJ_SIZE=1500;  % pixels
+%    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
+%    F_LOW=20e3;  % Hz
+%    F_HIGH=120e3;  % Hz
+%    NSEG=1;
+%
+%  case 'R'   % rejection
+%    OBJ_SIZE=1000;  % pixels
+%    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
+%    F_LOW=1e3;  % Hz
+%    F_HIGH=20e3;  % Hz
+%    NSEG=3;
+%end
 
-if((nargin~=5) || ~ismember(upper(type),{'R' 'US'}))
-  error('invalid args');
+%MERGE_FREQ_OVERLAP=0.9;   % one syl overlaping the other by > 90%
+%MERGE_FREQ_RATIO=0.1;     % within 10% of being a harmonic
+%MERGE_FREQ_FRACTION=0.9;  % for >90% of the overlap
+
+%function mtbp2(type,merge_time,merge_freq,channels,data_path)
+%function mtbp2(obj_size, conv_size, f_low, f_high, nseg, merge_time, ...
+%    merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, channels, data_path)
+function mtbp2(varargin)
+
+switch nargin
+  case 2
+    data_path=varargin{1};
+    run(varargin{2});
+  case 12
+    data_path=varargin{1};
+    channels=varargin{2};
+    obj_size=varargin{3};
+    conv_size=varargin{4};
+    f_low=varargin{5};
+    f_high=varargin{6};
+    nseg=varargin{7};
+    merge_time=varargin{8};
+    merge_freq=varargin{9};
+    merge_freq_overlap=varargin{10};
+    merge_freq_ratio=varargin{11};
+    merge_freq_fraction=varargin{12};
+  otherwise
+    error('invalid args');
 end
 
-tmp=dir(fullfile(datapath,'*.mtbp'));
+tmp=dir(fullfile(data_path,'*.mtbp'));
 if(~isempty(tmp))
   datafiles=cell(1,length(tmp));
   for i=1:length(tmp)
@@ -35,46 +92,51 @@ if(~isempty(tmp))
   end
   parfor i=1:length(datafiles)
   %for i=1:length(datafiles)
-    mtbp2_guts(i,type,merge_time,merge_freq,channels,fullfile(datapath,datafiles{i}));
+    mtbp2_guts(i,obj_size, conv_size, f_low, f_high, nseg, merge_time, ...
+        merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, channels, ...
+        fullfile(data_path, datafiles{i}));
   end
 else
-  tmp=dir([datapath '*.mtbp']);
+  tmp=dir([data_path '*.mtbp']);
   if(~isempty(tmp))
-    mtbp2_guts(0,type,merge_time,merge_freq,channels,datapath);
+    mtbp2_guts(0, obj_size, conv_size, f_low, f_high, nseg, merge_time, ...
+        merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, channels, data_path);
   else
-    error(['can''t find ' datapath]);
+    error(['can''t find ' data_path]);
   end
 end
 
 
-function mtbp2_guts(num,type,merge_time,merge_freq,channels,filename)
+function mtbp2_guts(num, OBJ_SIZE, CONV_SIZE, F_LOW, F_HIGH, NSEG, MERGE_TIME, ...
+    MERGE_FREQ, MERGE_FREQ_OVERLAP, MERGE_FREQ_RATIO, MERGE_FREQ_FRACTION, CHANNELS, filename)
 
 GROUNDTRUTH=0;
 SAVE_WAV=0;
 SAVE_PNG=0;
-MERGE_TIME=merge_time;
-MERGE_FREQ=merge_freq;
-MERGE_FREQ_OVERLAP=0.9;   % one syl overlaping the other by > 90%
-MERGE_FREQ_RATIO=0.1;     % within 10% of being a harmonic
-MERGE_FREQ_FRACTION=0.9;  % for >90% of the overlap
-CHANNELS=channels;  if(isempty(CHANNELS))  CHANNELS=[1:4 6:8];  end
+%MERGE_TIME=merge_time;
+%MERGE_FREQ=merge_freq;
+%MERGE_FREQ_OVERLAP=0.9;   % one syl overlaping the other by > 90%
+%MERGE_FREQ_RATIO=0.1;     % within 10% of being a harmonic
+%MERGE_FREQ_FRACTION=0.9;  % for >90% of the overlap
+%CHANNELS=channels;
+if(isempty(CHANNELS))  CHANNELS=[1:4 6:8];  end
 
 
-switch(upper(type))
-  case 'US'   % ultrasonic
-    OBJ_SIZE=1500;  % pixels
-    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
-    F_LOW=20e3;  % Hz
-    F_HIGH=120e3;  % Hz
-    NHARM=1;
-
-  case 'R'   % rejection
-    OBJ_SIZE=1000;  % pixels
-    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
-    F_LOW=1e3;  % Hz
-    F_HIGH=20e3;  % Hz
-    NHARM=3;
-end
+%switch(upper(type))
+%  case 'US'   % ultrasonic
+%    OBJ_SIZE=1500;  % pixels
+%    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
+%    F_LOW=20e3;  % Hz
+%    F_HIGH=120e3;  % Hz
+%    NSEG=1;
+%
+%  case 'R'   % rejection
+%    OBJ_SIZE=1000;  % pixels
+%    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
+%    F_LOW=1e3;  % Hz
+%    F_HIGH=20e3;  % Hz
+%    NSEG=3;
+%end
 
 if(SAVE_WAV || SAVE_PNG)
   figure;
@@ -317,7 +379,7 @@ while ~eof
         end
       end
     end
-    idx=find(syls3>=NHARM);
+    idx=find(syls3>=NSEG);
     syls.NumObjects=length(idx);
     syls.PixelIdxList={syls.PixelIdxList{idx}};
     syls2=regionprops(syls,'basic');
@@ -357,7 +419,7 @@ while ~eof
         end
       end
     end
-    %idx=find(syls3>=NHARM);
+    %idx=find(syls3>=NSEG);
     %syls.NumObjects=length(idx);
     %syls.PixelIdxList={syls.PixelIdxList{idx}};
     %syls2=regionprops(syls,'basic');
@@ -493,13 +555,13 @@ else
 end
 
 tmp=[skytruth(:,1:2) skytruth(:,4:5)];
-save([filename '.voc' sprintf('%d',channels)],'tmp','-ascii');
-save([filename '.fc' sprintf('%d',channels)],'freqtruth');
+save([filename '.voc' sprintf('%d',CHANNELS)],'tmp','-ascii');
+save([filename '.fc' sprintf('%d',CHANNELS)],'freqtruth');
 if(GROUNDTRUTH)
   tmp=groundtruth(misses,1:2);
-  save([filename '.miss' sprintf('%d',channels)],'tmp','-ascii');
+  save([filename '.miss' sprintf('%d',CHANNELS)],'tmp','-ascii');
   tmp=[skytruth(false_alarms,1:2) skytruth(false_alarms,4:5)];
-  save([filename '.fa' sprintf('%d',channels)],'tmp','-ascii');
+  save([filename '.fa' sprintf('%d',CHANNELS)],'tmp','-ascii');
 end
 
 
