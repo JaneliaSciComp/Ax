@@ -22,9 +22,11 @@ end
 
 tstart=tic;
 
+close_it=0;
 if((exist('matlabpool')==2) && (matlabpool('size')==0))
   try
     matlabpool open
+    close_it=1;
   catch
     disp('WARNING: could not open matlab pool.  proceeding with a single thread.');
   end
@@ -192,7 +194,7 @@ end
 tstop=toc(tstart);
 disp(['Run time was ' num2str(tstop/60,3) ' minutes.']);
 
-if((exist('matlabpool')==2) && (matlabpool('size')>0))
+if((exist('matlabpool')==2) && (matlabpool('size')>0) && close_it)
   try
     matlabpool close
   catch
