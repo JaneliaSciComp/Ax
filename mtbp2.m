@@ -154,10 +154,7 @@ for i=1:length(tmp)
   fid(i)=fopen(fullfile(fileparts(filename),tmp(i).name));
   data(i).VERSION=fread(fid(i),1,'uint8');
   data(i).SUBSAMPLE=fread(fid(i),1,'uint8');
-  data(i).CHUNK2=fread(fid(i),1,'uint8');
-  if((i>1) && (data(i).CHUNK2~=data(1).CHUNK2))
-    error('CHUNK2''s are not the same');
-  end
+  data(i).CHUNK=fread(fid(i),1,'uint8');
   data(i).FS=fread(fid(i),1,'uint32');
   if((i>1) && (data(i).FS~=data(1).FS))
     error('sampling frequencies are not the same');
@@ -180,7 +177,7 @@ df=min([data.df])/10;
 minNFFT=min([data.NFFT]);
 maxNFFT=max([data.NFFT]);
 FS=data(1).FS;
-chunk_len=round(data(1).CHUNK2*FS/(maxNFFT/2))*maxNFFT./[data.NFFT];  % windows
+CHUNK_TIME=round(10*FS/(maxNFFT/2))*maxNFFT./[data.NFFT];  % 10 sec, in units of windows
 skytruth=[];
 freqtruth={};
 MERGE_TIME=MERGE_TIME*FS/minNFFT*2;
@@ -188,7 +185,7 @@ voc_num=1;
 hit_num=1;
 miss_num=1;
 fa_num=1;
-CHUNK3=1024;
+CHUNK_FILE=1024;
 
 if(GROUNDTRUTH)
   groundtruth=load([filename '.gnd']);
@@ -204,24 +201,28 @@ if(GROUNDTRUTH)
 end
 
 tic;
-eof=false;  count=4*CHUNK3;
+eof=false;  count=4*CHUNK_FILE;
 chunk_curr=1;
 while ~eof
-  if(toc>10)  disp([num2str(num) ': ' num2str(chunk_curr*data(1).CHUNK2) ' sec chunk']);  tic;  end;
-  eof=(max(count)<4*CHUNK3);
+  if(toc>10)  disp([num2str(num) ': ' num2str(chunk_curr*data(1).CHUNK) ' sec chunk']);  tic;  end;
+  eof=(max(count)<4*CHUNK_FILE);
 
   %collapsing across channels and window sizes
   if ~eof
     for i=1:length(data)
       tmp=[];  data(i).MT_next=[];
       while ~feof(fid(i))
-        [foo,count(i)]=fread(fid(i),[4 CHUNK3],'double');
+        [foo,count(i)]=fread(fid(i),[4 CHUNK_FILE],'double');
         tmp=[tmp; foo'];
-        idx=find(tmp(:,1)>chunk_curr*chunk_len(i),1);
+        if(feof(fid(i)))
+          idx=size(tmp,1)+1;
+        else
+          idx=find(tmp(:,1)>chunk_curr*CHUNK_TIME(i),1);
+        end
         if(~isempty(idx))
           idx2=find((tmp(1:(idx-1),2)>=F_LOW) & (tmp(1:(idx-1),2)<=F_HIGH) & ismember(tmp(1:(idx-1),4),CHANNELS));
           data(i).MT_next=tmp(idx2,:);
-          data(i).MT_next(:,1)=data(i).MT_next(:,1)-(chunk_curr-1)*chunk_len(i);
+          data(i).MT_next(:,1)=data(i).MT_next(:,1)-(chunk_curr-1)*CHUNK_TIME(i);
           fseek(fid(i),-(size(tmp,1)-idx+1)*4*8,'cof');
           break;
         end
@@ -229,7 +230,7 @@ while ~eof
     end
 
     sizeF=ceil(F_HIGH/df)-floor(F_LOW/df)+2*floor(maxNFFT/minNFFT/2)+1;
-    sizeT=chunk_len(1)+2*floor(maxNFFT/minNFFT/2)+1;
+    sizeT=CHUNK_TIME(1)+2*floor(maxNFFT/minNFFT/2)+1;
     im_next=false(sizeF,sizeT);
 
     for k=1:length(data)
@@ -282,14 +283,14 @@ while ~eof
         if(sum(cj<=((CONV_SIZE(2)-1)/2))==0)  j=j+1;  continue;  end
         %if((max(ri) < (min(rj)-1)) || (max(rj) < (min(ri)-1)))  j=j+1;  continue;  end
         %cj=cj+chunk_splits(k+1)-chunk_splits(k);
-        cj=cj+chunk_len(1);
+        cj=cj+CHUNK_TIME(1);
         min(min((repmat(ri,1,length(rj))-repmat(rj',length(ri),1)).^2 + ...
                 (repmat(ci,1,length(cj))-repmat(cj',length(ci),1)).^2));
         if ans<=2
           %disp(['unsplitting syllable between chunks #' num2str(k) '-' num2str(k+1)]);
           flag=1;
           syls.PixelIdxList{i}=[syls.PixelIdxList{i}; ...
-              syls_next.PixelIdxList{j}+chunk_len(1)*syls.ImageSize(1)];
+              syls_next.PixelIdxList{j}+CHUNK_TIME(1)*syls.ImageSize(1)];
           syls_next.PixelIdxList(j)=[];
           syls_next.NumObjects=syls_next.NumObjects-1;
         else
@@ -320,7 +321,7 @@ while ~eof
       [r c]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
       idx=ismember(foo,[c r],'rows');
       foo=data(j).MT(idx,1:3);
-      foo(:,1)=foo(:,1)+(chunk_curr-2)*chunk_len(j);  % +1?
+      foo(:,1)=foo(:,1)+(chunk_curr-2)*CHUNK_TIME(j);  % +1?
       foo(:,1)=foo(:,1).*data(j).NFFT/2/FS;
       tmp=[tmp; foo];
     end
@@ -429,7 +430,7 @@ while ~eof
   %%tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
   tmp(:,3)=tmp(:,3)-CONV_SIZE(2)+1;
   skytruth=[skytruth; ...
-      ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*chunk_len(1))*minNFFT/2/FS ...
+      ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*CHUNK_TIME(1))*minNFFT/2/FS ...
       zeros(size(tmp,1),1) ...
       [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
   freqtruth={freqtruth{:} freq_contour{:}};
@@ -470,7 +471,7 @@ while ~eof
     clf;  hold on;
 
     [r,c]=ind2sub(syls.ImageSize,cat(1,syls.PixelIdxList{:}));
-    c=c-(CONV_SIZE(2)-1)/2+(chunk_curr-2)*chunk_len(1);
+    c=c-(CONV_SIZE(2)-1)/2+(chunk_curr-2)*CHUNK_TIME(1);
     plot(c.*(minNFFT/2)./FS,r.*df+F_LOW,'kx');
 
     for i=1:length(syls2)
@@ -480,8 +481,8 @@ while ~eof
     end
 
     if(GROUNDTRUTH)
-      left =(chunk_curr-2)*chunk_len(end)*maxNFFT/2/FS;
-      right=(chunk_curr-1)*chunk_len(end)*maxNFFT/2/FS;
+      left =(chunk_curr-2)*CHUNK_TIME(end)*maxNFFT/2/FS;
+      right=(chunk_curr-1)*CHUNK_TIME(end)*maxNFFT/2/FS;
       idx=find(((groundtruth(:,1)>=left) & (groundtruth(:,1)<=right)) | ...
                ((groundtruth(:,2)>=left) & (groundtruth(:,2)<=right)));
       if(~isempty(idx))

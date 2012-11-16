@@ -42,8 +42,8 @@ else
   PVAL=varargin{5};
 end
 if((nargin==5)||(nargin==9))
-  START=varargin{6};
-  STOP=varargin{7};
+  START=varargin{end-1};
+  STOP=varargin{end};
 end
 
 if(ischar(FS))        FS=str2num(FS);              end
@@ -61,7 +61,6 @@ if(length(NFFT)>1)
 end
 
 VERSION=1;
-CHUNK2=10;  % sec
 
 SUBSAMPLE=1;
 NWORKERS=matlabpool('size');
@@ -70,7 +69,7 @@ if(NWORKERS==0)  NWORKERS=1;  end
 FS=FS/SUBSAMPLE;
 
 NFFT=2^nextpow2(NFFT*FS);  % convert to ticks
-CHUNK1=round(256*1000/NFFT);  % NFFT/2 ticks
+CHUNK=round(256*1000/NFFT);  % NFFT/2 ticks
 
 FIRST_MT=nan;
 LAST_MT=nan;
@@ -92,7 +91,6 @@ MT_PARAMS.fpass=[0 FS/2];
 
 f=(0:(NFFT/2))*FS/NFFT;
 df=f(2)-f(1);
-chunk2=round(CHUNK2*FS/(NFFT/2));
 
 REMAP=[1:4 6:8];  % blegh
 
@@ -114,23 +112,24 @@ for i=1:length(FILEINs)
   end
   fseek(fid(i),0,1);
   FILE_LEN=ftell(fid(i))/4/FS;
-  disp([num2str(FILE_LEN/60,3) ' minutes of data in ' FILEINs(i).name]);
   if(~exist('START','var'))
+    disp(['Processing ' num2str(FILE_LEN/60,3) ' minutes of data in ' FILEINs(i).name]);
     fseek(fid(i),0,-1);
     t_now_sec=0;
   else
+    disp(['Processing ' num2str((STOP-START)/60,3) ' minutes of data in ' FILEINs(i).name]);
     fseek(fid(i),round(START*FS)*4,-1);
     t_now_sec=START;
   end
 end
 
-dd=zeros(length(fid),NFFT/2*(NWORKERS*CHUNK1+1));
+dd=zeros(length(fid),NFFT/2*(NWORKERS*CHUNK+1));
 for i=1:length(fid)
   dd(i,(end-NFFT/2+1):end)=fread(fid(i),NFFT/2,'float32',4*(SUBSAMPLE-1));
 end
 
 fid_out=fopen([FILEIN '-' FILEOUT '.mtbp'],'w');
-fwrite(fid_out,uint8([VERSION SUBSAMPLE CHUNK2]),'uint8');
+fwrite(fid_out,uint8([VERSION SUBSAMPLE CHUNK]),'uint8');  % CHUNK not necessary
 fwrite(fid_out,uint32([FS NFFT]),'uint32');
 fwrite(fid_out,uint16([NW K]),'uint16');
 fwrite(fid_out,[PVAL df],'double');
@@ -142,34 +141,34 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
     tmp=t_now_sec;
     tmp2=0;  if(exist('START','var'))  tmp=tmp-START;  tmp2=START;  end
     if(exist('STOP','var'))  tmp=tmp/(STOP-tmp2);  else  tmp=tmp/(FILE_LEN-tmp2);  end
-    disp([num2str(round(t_now_sec)) ' sec processed;  ' num2str(round(100*tmp)) '% done']);
+    disp([num2str(round(t_now_sec-tmp2)) ' sec processed;  ' num2str(round(100*tmp)) '% done']);
     tic;
   end
 
   dd(:,1:(NFFT/2))=dd(:,(end-NFFT/2+1):end);
   for i=1:length(fid)
-    [tmp count]=fread(fid(i),NFFT/2*NWORKERS*CHUNK1,'float32',4*(SUBSAMPLE-1));
-    if(count<NFFT/2*NWORKERS*CHUNK1)
-      tmp=[tmp; zeros(NFFT/2*NWORKERS*CHUNK1-count,1)];
+    [tmp count]=fread(fid(i),NFFT/2*NWORKERS*CHUNK,'float32',4*(SUBSAMPLE-1));
+    if(count<NFFT/2*NWORKERS*CHUNK)
+      tmp=[tmp; zeros(NFFT/2*NWORKERS*CHUNK-count,1)];
     end
     dd(i,(NFFT/2+1):end)=tmp;
   end
 
-  idx=cell(NCHANNELS,CHUNK1,NWORKERS);
+  idx=cell(NCHANNELS,CHUNK,NWORKERS);
   parfor i=1:NWORKERS
-    for j=1:CHUNK1
-      [F,p,f,sig,sd] = ftestc(dd(:,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK1-1))',MT_PARAMS,PVAL/NFFT,'n');
+    for j=1:CHUNK
+      [F,p,f,sig,sd] = ftestc(dd(:,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1))',MT_PARAMS,PVAL/NFFT,'n');
       for l=1:NCHANNELS
         tmp=1+find(F(2:end,l)'>sig);
         tmp2=[];
         for m=1:length(tmp)
-          [tmp2(m,1) tmp2(m,2)]=brown2_puckette(dd(l,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK1-1)),f,tmp(m),FS);
+          [tmp2(m,1) tmp2(m,2)]=brown2_puckette(dd(l,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1)),f,tmp(m),FS);
         end
         idx{l,j,i}=tmp2;
       end
     end
   end
-  idx=reshape(idx,NCHANNELS,NWORKERS*CHUNK1);
+  idx=reshape(idx,NCHANNELS,NWORKERS*CHUNK);
   [sub1,sub2]=ind2sub(size(idx),find(~cellfun(@isempty,idx)));
   if(length(sub1)>0)
     for i=1:length(sub1)
@@ -181,8 +180,8 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
   else
   end
 
-  t_now_sec=t_now_sec+NFFT/2/FS*NWORKERS*CHUNK1;
-  t_now=t_now+NWORKERS*CHUNK1;
+  t_now_sec=t_now_sec+NFFT/2/FS*NWORKERS*CHUNK;
+  t_now=t_now+NWORKERS*CHUNK;
 end
 
 fwrite(fid_out,'Z','uchar');

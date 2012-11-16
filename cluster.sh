@@ -69,11 +69,11 @@ if [ ${#NFFT[@]} -lt $tmp ] ; then
   do NFFT[i]=${NFFT[0]}; done
 fi
 
-echo ${FS[@]}
-echo ${NW[@]}
-echo ${K[@]}
-echo ${PVAL[@]}
-echo ${NFFT[@]}
+#echo ${FS[@]}
+#echo ${NW[@]}
+#echo ${K[@]}
+#echo ${PVAL[@]}
+#echo ${NFFT[@]}
 
 # launch one instance of mtbp() per set of params
 if [ -d $2 ] ; then
