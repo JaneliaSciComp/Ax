@@ -214,10 +214,9 @@ while ~eof
       while ~feof(fid(i))
         [foo,count(i)]=fread(fid(i),[4 CHUNK_FILE],'double');
         tmp=[tmp; foo'];
-        if(feof(fid(i)))
+        idx=find(tmp(:,1)>chunk_curr*CHUNK_TIME(i),1);
+        if(feof(fid(i)) && isempty(idx))
           idx=size(tmp,1)+1;
-        else
-          idx=find(tmp(:,1)>chunk_curr*CHUNK_TIME(i),1);
         end
         if(~isempty(idx))
           idx2=find((tmp(1:(idx-1),2)>=F_LOW) & (tmp(1:(idx-1),2)<=F_HIGH) & ismember(tmp(1:(idx-1),4),CHANNELS));
