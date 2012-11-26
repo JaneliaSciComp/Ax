@@ -1,8 +1,8 @@
-%function mtbp2(data_path, channels, obj_size, conv_size, f_low, f_high, nseg, ...
-%    merge_time, merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction)
-%function mtbp2(data_path, params_file)
+%function mtbp2(channels, obj_size, conv_size, f_low, f_high, nseg, ...
+%    merge_time, merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
+%    data_path)
+%function mtbp2(params_file, data_path)
 %
-%data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
 %channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
 %obj_size is in pixels
 %conv_size is [height_freq width_time] in pixels, each must be odd
@@ -14,23 +14,17 @@
 %merge_freq_overlap is the fraction in time two segments must overlap
 %merge_freq_ratio is the tolerance in frequency ratio two segments must be within
 %merge_freq_fraction is the fraction of the overlap the must be within the tolerance
+%data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
 %
 %for ultrasonic:
-%mtbp2('/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/',...
-%    1:4, 1500, [15 7], 20e3, 120e3, 1, [], 0, 0.9, 0.1, 0.9);
-%mtbp2('/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/', 'ultrasonic_params.m');
+%mtbp2(1:4, 1500, [15 7], 20e3, 120e3, 1, [], 0, 0.9, 0.1, 0.9,...
+%    '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+%mtbp2('ultrasonic_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 %
 %for rejection:
-%mtbp2('/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/',...
-%    1:4, 1000, [15 7], 1e3, 20e3, 3, [], 0, 0.9, 0.1, 0.9);
-%mtbp2('/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/', rejection_params.m);
-
-%mtbp2('US',[],0,1:4,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-%mtbp2('US',[],0,1:4,'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-%mtbp2('R',0.005,0,1,4:'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-%mtbp2('R',0.005,0,1,4:'/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1');
-%mtbp2('US',0.005,0,1:4,'/groups/egnor/egnorlab/for_ben/kelly');
-%mtbp2('US',0.005,0,6,'/groups/egnor/egnorlab/for_ben/kelly');
+%mtbp2(1:4, 1000, [15 7], 1e3, 20e3, 3, [], 0, 0.9, 0.1, 0.9,...
+%    '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+%mtbp2('rejection_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 
 %switch(upper(type))
 %  case 'US'   % ultrasonic
@@ -52,28 +46,28 @@
 %MERGE_FREQ_RATIO=0.1;     % within 10% of being a harmonic
 %MERGE_FREQ_FRACTION=0.9;  % for >90% of the overlap
 
-%function mtbp2(type,merge_time,merge_freq,channels,data_path)
 %function mtbp2(obj_size, conv_size, f_low, f_high, nseg, merge_time, ...
-%    merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, channels, data_path)
+%    merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, channels, ...
+%    data_path)
 function mtbp2(varargin)
 
 switch nargin
   case 2
-    data_path=varargin{1};
-    run(varargin{2});
+    run(varargin{1});
+    data_path=varargin{2};
   case 12
-    data_path=varargin{1};
-    channels=varargin{2};
-    obj_size=varargin{3};
-    conv_size=varargin{4};
-    f_low=varargin{5};
-    f_high=varargin{6};
-    nseg=varargin{7};
-    merge_time=varargin{8};
-    merge_freq=varargin{9};
-    merge_freq_overlap=varargin{10};
-    merge_freq_ratio=varargin{11};
-    merge_freq_fraction=varargin{12};
+    channels=varargin{1};
+    obj_size=varargin{2};
+    conv_size=varargin{3};
+    f_low=varargin{4};
+    f_high=varargin{5};
+    nseg=varargin{6};
+    merge_time=varargin{7};
+    merge_freq=varargin{8};
+    merge_freq_overlap=varargin{9};
+    merge_freq_ratio=varargin{10};
+    merge_freq_fraction=varargin{11};
+    data_path=varargin{12};
   otherwise
     error('invalid args');
 end
