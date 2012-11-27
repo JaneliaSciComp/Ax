@@ -16,6 +16,11 @@
 %merge_freq_fraction is the fraction of the overlap the must be within the tolerance
 %data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
 %
+%three files are output:
+%.voc: an Mx4 array whose columns are the start & stop times (sec), and low & high frequences (Hz)
+%.fc: a cell array (vocalizations) of cell arrays (syllables) of Nx3 arrays (time[s], freq[Hz], amplitude)
+%.params: a .m file of the parameters used
+
 %for ultrasonic:
 %mtbp2(1:4, 1500, [15 7], 20e3, 120e3, 1, [], 0, 0.9, 0.1, 0.9,...
 %    '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
