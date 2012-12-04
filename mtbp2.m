@@ -418,11 +418,11 @@ while ~eof
         end
       end
     end
-    %idx=find(syls3>=NSEG);
-    %syls.NumObjects=length(idx);
-    %syls.PixelIdxList={syls.PixelIdxList{idx}};
-    %syls2=regionprops(syls,'basic');
-    %freq_contour={freq_contour{idx}};
+    idx=find(syls3>=NSEG);
+    syls.NumObjects=length(idx);
+    syls.PixelIdxList={syls.PixelIdxList{idx}};
+    syls2=regionprops(syls,'basic');
+    freq_contour={freq_contour{idx}};
   end
   tmp=reshape([syls2.BoundingBox],4,length(syls2))';
   %%tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
