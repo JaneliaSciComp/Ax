@@ -1,7 +1,7 @@
-% function mtbp(FILEIN,FILEOUT,params_file)
-% function mtbp(FILEIN,FILEOUT,params_file,START,STOP)
-% function mtbp(FILEIN,FILEOUT,FS,NFFT,NW,K,PVAL)
-% function mtbp(FILEIN,FILEOUT,FS,NFFT,NW,K,PVAL,START,STOP)
+% function mtbp(params_file,FILEIN,FILEOUT)
+% function mtbp(params_file,FILEIN,FILEOUT,START,STOP)
+% function mtbp(FS,NFFT,NW,K,PVAL,FILEIN,FILEOUT)
+% function mtbp(FS,NFFT,NW,K,PVAL,FILEIN,FILEOUT,START,STOP)
 %
 % FS: sampling rate in Hertz
 % NFFT: FFT window size in seconds, rounds up to the next power of 2 tics
@@ -10,11 +10,11 @@
 % PVAL:  F-test p-val threshold
 % START,STOP:  optional time range, in seconds
 %
-% mtbp('urine',1,200e3,0.001,15,29,0.01);
-% mtbp('groundtruth',1,450450,0.001,15,29,0.01,0,30);
+% mtbp('ultrasonic_params','urine','1');  % need to have just one NFFT specified
+% mtbp(200e3,0.001,15,29,0.01,'urine','1');
+% mtbp(450450,0.001,15,29,0.01,0,30,'groundtruth','1');
 
-%function mtbp(FILEIN,FILEOUT,FS,NFFT,NW,K,PVAL,varargin)
-function mtbp(FILEIN,FILEOUT,varargin)
+function mtbp(varargin)
 
 if((nargin~=3)&&(nargin~=5)&&(nargin~=7)&&(nargin~=9))
   error('invalid args');
@@ -34,12 +34,16 @@ end
 
 if(nargin<6)
   run(varargin{1});
+  FILEIN=varargin{2};
+  FILEOUT=varargin{3};
 else
   FS=varargin{1};
   NFFT=varargin{2};
   NW=varargin{3};
   K=varargin{4};
   PVAL=varargin{5};
+  FILEIN=varargin{6};
+  FILEOUT=varargin{7};
 end
 if((nargin==5)||(nargin==9))
   START=varargin{end-1};

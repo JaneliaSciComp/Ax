@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # cd to folder containing cluster.sh and then execute:
-#   ./cluster.sh  full_path_to_parameters  full_path_to_data
+#   ./cluster.sh  full_path_to_parameters  full_path_to_data [start(s) stop(s)]
 # data can either be a folder of sessions or a single session's base filename
 # for example
 #   ./cluster.sh  ./ultrasonic_parameters.m  /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/
@@ -11,33 +11,13 @@
 # if any are a scalar the same value is used for each call.  those which are
 # arrays must have the same length.
 
-if [ $# -ne 2 ]
+if [ $# -ne 2 ] && [ $# -ne 4 ]
 then
   echo invalid arguments
   exit
 fi
 
 eval $( sed "s/\[/\\(/g" $1 | sed "s/\]/\\)/g" )
-
-#if [ $1 == 'US' ] ; then
-#  FS=450450;  # Hz
-#  #NW=15
-#  #K=29
-#  NW=22
-#  K=43
-#  PVAL=0.01
-#  NFFT=(0.001 0.0005 0.00025)  # sec (rounds up to next power of 2 tics)
-#  #NFFT=(0.00025)  # sec (rounds up to next power of 2 tics)
-#elif [ $1 == 'R' ]; then
-#  FS=450450;  # Hz
-#  NW=18
-#  K=24
-#  PVAL=0.01
-#  NFFT=(0.009 0.0045 0.0022)  # sec (rounds up to next power of 2 tics)
-#else
-#  echo first argument must either be R or US
-#  exit
-#fi
 
 # get maximum length of params
 tmp=(${#FS[@]} ${#NW[@]} ${#K[@]} ${#PVAL[@]} ${#NFFT[@]})
@@ -90,7 +70,7 @@ do
   for j in $(seq 0 $((${#NFFT[@]} - 1)))
   do
 #    echo $j
-    qsub -N "$job_name-$j" -pe batch 8 -b y -j y -cwd -o "$dir_name/$job_name-$j.log" -V ./cluster2.sh "\"$i\"" "\"$j\"" "\"${FS[j]}\"" "\"${NFFT[j]}\"" "\"${NW[j]}\"" "\"${K[j]}\"" "\"${PVAL[j]}\"" "\"$3\"" "\"$4\""
+    qsub -N "$job_name-$j" -pe batch 8 -b y -j y -cwd -o "$dir_name/$job_name-$j.log" -V ./cluster2.sh "\"${FS[j]}\"" "\"${NFFT[j]}\"" "\"${NW[j]}\"" "\"${K[j]}\"" "\"${PVAL[j]}\"" "\"$i\"" "\"$j\"" "\"$3\"" "\"$4\""
     sleep 1
   done
 done

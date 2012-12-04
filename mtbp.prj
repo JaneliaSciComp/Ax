@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <deployment-project plugin="plugin.deploytool" plugin-version="1.0">
-  <configuration target="target.standalone" target-name="Standalone Application" name="mtbp" location="/home/arthurb/projects/egnor/mtbp" file="/home/arthurb/projects/egnor/mtbp/mtbp.prj" build-checksum="4263485721">
+  <configuration target="target.standalone" target-name="Standalone Application" name="mtbp" location="/home/arthurb/projects/egnor/mtbp" file="/home/arthurb/projects/egnor/mtbp/mtbp.prj" build-checksum="1969600201">
     <param.project.name>/home/arthurb/projects/egnor/mtbp/mtbp.prj</param.project.name>
     <param.target.type>Standalone Application</param.target.type>
     <param.appname>mtbp</param.appname>
@@ -162,8 +162,6 @@
         <directory>/home/arthurb/matlab/chronux/test</directory>
         <directory>/home/arthurb/matlab/chronux/wave_browser</directory>
         <directory>/home/arthurb/matlab/chronux/wave_browser/html</directory>
-        <directory>/home/arthurb/projects/stern/Fly_Song_Segmenter/chronux</directory>
-        <directory>/home/arthurb/projects/stern/Fly_Song_Segmenter</directory>
         <directory>/home/arthurb/Documents/MATLAB</directory>
         <directory>/home/arthurb/matlab</directory>
         <directory>${MATLAB_ROOT}/toolbox/matlab/optimfun</directory>
