@@ -10,6 +10,8 @@
 % PVAL:  F-test p-val threshold
 % START,STOP:  optional time range, in seconds
 %
+% output is a binary file with a time x frequency x amplitude x channel array of hot pixels
+%
 % mtbp('ultrasonic_params','urine','1');  % need to have just one NFFT specified
 % mtbp(200e3,0.001,15,29,0.01,'urine','1');
 % mtbp(450450,0.001,15,29,0.01,0,30,'groundtruth','1');
