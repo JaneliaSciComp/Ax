@@ -1,19 +1,21 @@
-%function mtbp2(channels, obj_size, conv_size, f_low, f_high, nseg, ...
-%    merge_time, merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
-%    data_path)
+%function mtbp2(f_low, f_high, conv_size, obj_size, ...
+%    merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
+%    merge_time, nseg, min_length, ...
+%    channels, data_path)
 %function mtbp2(params_file, data_path)
 %
-%channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
-%obj_size is in pixels
-%conv_size is [height_freq width_time] in pixels, each must be odd
 %f_low, f_high are in Hz
-%nseg is the minimum number of merged segements a vocalization must contain
-%merge_time is the overlap criterion, in seconds, below which vocalizations
-%  are combined;  use [] to not combine
+%conv_size is [height_freq width_time] in pixels, each must be odd
+%obj_size is in pixels
 %set merge_freq to 1 to collapse harmonically related syllables, 0 otherwise
 %merge_freq_overlap is the fraction in time two segments must overlap
 %merge_freq_ratio is the tolerance in frequency ratio two segments must be within
 %merge_freq_fraction is the fraction of the overlap the must be within the tolerance
+%merge_time is the maximum gap length, in seconds, below which vocalizations
+%  are combined;  use 0 to not combine
+%nseg is the minimum number of merged segements a vocalization must contain
+%min_length is the minimum syllable length in sec
+%channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
 %data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
 %
 %three files are output:
@@ -22,57 +24,35 @@
 %.params: a .m file of the parameters used
 
 %for ultrasonic:
-%mtbp2(1:4, 1500, [15 7], 20e3, 120e3, 1, [], 0, 0.9, 0.1, 0.9,...
-%    '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+%mtbp2(20e3, 120e3, [15 7], 1500, 0, 0.9, 0.1, 0.9, 0, 1, 0,...
+%    1:4, '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 %mtbp2('ultrasonic_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 %
 %for rejection:
-%mtbp2(1:4, 1000, [15 7], 1e3, 20e3, 3, [], 0, 0.9, 0.1, 0.9,...
-%    '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+%mtbp2(1e3, 20e3, [15 7], 1000, 0, 0.9, 0.1, 0.9, 0, 3, 0,...
+%    1:4, '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 %mtbp2('rejection_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 
-%switch(upper(type))
-%  case 'US'   % ultrasonic
-%    OBJ_SIZE=1500;  % pixels
-%    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
-%    F_LOW=20e3;  % Hz
-%    F_HIGH=120e3;  % Hz
-%    NSEG=1;
-%
-%  case 'R'   % rejection
-%    OBJ_SIZE=1000;  % pixels
-%    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
-%    F_LOW=1e3;  % Hz
-%    F_HIGH=20e3;  % Hz
-%    NSEG=3;
-%end
-
-%MERGE_FREQ_OVERLAP=0.9;   % one syl overlaping the other by > 90%
-%MERGE_FREQ_RATIO=0.1;     % within 10% of being a harmonic
-%MERGE_FREQ_FRACTION=0.9;  % for >90% of the overlap
-
-%function mtbp2(obj_size, conv_size, f_low, f_high, nseg, merge_time, ...
-%    merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, channels, ...
-%    data_path)
 function mtbp2(varargin)
 
 switch nargin
   case 2
     run(varargin{1});
     data_path=varargin{2};
-  case 12
-    channels=varargin{1};
-    obj_size=varargin{2};
+  case 13
+    f_low=varargin{1};
+    f_high=varargin{2};
     conv_size=varargin{3};
-    f_low=varargin{4};
-    f_high=varargin{5};
-    nseg=varargin{6};
-    merge_time=varargin{7};
-    merge_freq=varargin{8};
-    merge_freq_overlap=varargin{9};
-    merge_freq_ratio=varargin{10};
-    merge_freq_fraction=varargin{11};
-    data_path=varargin{12};
+    obj_size=varargin{4};
+    merge_freq=varargin{5};
+    merge_freq_overlap=varargin{6};
+    merge_freq_ratio=varargin{7};
+    merge_freq_fraction=varargin{8};
+    merge_time=varargin{9};
+    nseg=varargin{10};
+    min_length=varargin{11};
+    channels=varargin{12};
+    data_path=varargin{13};
   otherwise
     error('invalid args');
 end
@@ -98,44 +78,23 @@ if(~isempty(tmp))
 else
   tmp=dir([data_path '*.mtbp']);
   if(~isempty(tmp))
-    mtbp2_guts(0, obj_size, conv_size, f_low, f_high, nseg, merge_time, ...
-        merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, channels, data_path);
+    mtbp2_guts(0, f_low, f_high, conv_size, obj_size, ...
+        merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
+        merge_time, nseg, min_length, channels, data_path);
   else
     error(['can''t find ' data_path]);
   end
 end
 
 
-function mtbp2_guts(num, OBJ_SIZE, CONV_SIZE, F_LOW, F_HIGH, NSEG, MERGE_TIME, ...
-    MERGE_FREQ, MERGE_FREQ_OVERLAP, MERGE_FREQ_RATIO, MERGE_FREQ_FRACTION, CHANNELS, filename)
+function mtbp2_guts(num, F_LOW, F_HIGH, CONV_SIZE, OBJ_SIZE, ...
+    MERGE_FREQ, MERGE_FREQ_OVERLAP, MERGE_FREQ_RATIO, MERGE_FREQ_FRACTION, ...
+    MERGE_TIME, NSEG, MIN_LENGTH, CHANNELS, filename)
 
 GROUNDTRUTH=0;
 SAVE_WAV=0;
 SAVE_PNG=0;
-%MERGE_TIME=merge_time;
-%MERGE_FREQ=merge_freq;
-%MERGE_FREQ_OVERLAP=0.9;   % one syl overlaping the other by > 90%
-%MERGE_FREQ_RATIO=0.1;     % within 10% of being a harmonic
-%MERGE_FREQ_FRACTION=0.9;  % for >90% of the overlap
-%CHANNELS=channels;
 if(isempty(CHANNELS))  CHANNELS=[1:4 6:8];  end
-
-
-%switch(upper(type))
-%  case 'US'   % ultrasonic
-%    OBJ_SIZE=1500;  % pixels
-%    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
-%    F_LOW=20e3;  % Hz
-%    F_HIGH=120e3;  % Hz
-%    NSEG=1;
-%
-%  case 'R'   % rejection
-%    OBJ_SIZE=1000;  % pixels
-%    CONV_SIZE=[15 7];  % pixels, must be odd, should convert this to Hz x sec
-%    F_LOW=1e3;  % Hz
-%    F_HIGH=20e3;  % Hz
-%    NSEG=3;
-%end
 
 if(SAVE_WAV || SAVE_PNG)
   figure;
@@ -335,7 +294,8 @@ while ~eof
   end
 
   %merge harmonically related syllables...
-  if(~isempty(MERGE_FREQ))
+  if(MERGE_FREQ~=0)
+    %disp('merge harmonically related syllables...');
     syls3=ones(1,length(syls2));
     for i=1:(length(syls2)-1)
       if(isempty(syls.PixelIdxList{i}))  continue;  end
@@ -386,7 +346,8 @@ while ~eof
   end
 
   %merge temporally nearby syllables...
-  if(~isempty(MERGE_TIME))
+  if(MERGE_TIME~=0)
+    %disp('merge temporally nearby syllables...');
     syls3=ones(1,length(syls2));
     for i=1:(length(syls2)-1)
       if(isempty(syls.PixelIdxList{i}))  continue;  end
@@ -424,6 +385,18 @@ while ~eof
     syls2=regionprops(syls,'basic');
     freq_contour={freq_contour{idx}};
   end
+
+  %cull short syllables...
+  if(MIN_LENGTH>0)
+    disp('cull short syllables...');
+    reshape([syls2.BoundingBox],4,length(syls2))';
+    idx=find(((ans(:,3)-CONV_SIZE(2)+1)*minNFFT/2/FS)>MIN_LENGTH);
+    syls.NumObjects=length(idx);
+    syls.PixelIdxList={syls.PixelIdxList{idx}};
+    syls2=regionprops(syls,'basic');
+    freq_contour={freq_contour{idx}};
+  end
+
   tmp=reshape([syls2.BoundingBox],4,length(syls2))';
   %%tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
   tmp(:,3)=tmp(:,3)-CONV_SIZE(2)+1;
