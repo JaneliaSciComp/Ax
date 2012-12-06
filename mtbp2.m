@@ -206,7 +206,7 @@ while ~eof
   if(toc>10)  disp([num2str(num) ': ' num2str(chunk_curr*data(1).CHUNK) ' sec chunk']);  tic;  end;
   eof=(max(count)<4*CHUNK_FILE);
 
-  %collapsing across channels and window sizes
+  %collapse across channels and window sizes
   if ~eof
     for i=1:length(data)
       tmp=[];  data(i).MT_next=[];
@@ -378,7 +378,7 @@ while ~eof
         end
       end
     end
-    idx=find(syls3>=NSEG);
+    idx=find(syls3>=1);
     syls.NumObjects=length(idx);
     syls.PixelIdxList={syls.PixelIdxList{idx}};
     syls2=regionprops(syls,'basic');
