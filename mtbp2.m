@@ -135,7 +135,8 @@ df=min([data.df])/10;
 minNFFT=min([data.NFFT]);
 maxNFFT=max([data.NFFT]);
 FS=data(1).FS;
-CHUNK_TIME=round(10*FS/(maxNFFT/2))*maxNFFT./[data.NFFT];  % 10 sec, in units of windows
+CHUNK_TIME_SEC=10;  % sec
+CHUNK_TIME_WINDOWS=round(CHUNK_TIME_SEC*FS/(maxNFFT/2))*maxNFFT./[data.NFFT];  % in units of windows
 skytruth=[];
 freqtruth={};
 MERGE_TIME=MERGE_TIME*FS/minNFFT*2;
@@ -162,7 +163,7 @@ tic;
 eof=false;  count=4*CHUNK_FILE;
 chunk_curr=1;
 while ~eof
-  if(toc>10)  disp([num2str(num) ': ' num2str(chunk_curr*data(1).CHUNK) ' sec chunk']);  tic;  end;
+  if(toc>10)  disp([num2str(num) ': ' num2str(chunk_curr*CHUNK_TIME_SEC) ' sec chunk']);  tic;  end;
   eof=(max(count)<4*CHUNK_FILE);
 
   %collapse across channels and window sizes
@@ -172,14 +173,14 @@ while ~eof
       while ~feof(fid(i))
         [foo,count(i)]=fread(fid(i),[4 CHUNK_FILE],'double');
         tmp=[tmp; foo'];
-        idx=find(tmp(:,1)>chunk_curr*CHUNK_TIME(i),1);
+        idx=find(tmp(:,1)>chunk_curr*CHUNK_TIME_WINDOWS(i),1);
         if(feof(fid(i)) && isempty(idx))
           idx=size(tmp,1)+1;
         end
         if(~isempty(idx))
           idx2=find((tmp(1:(idx-1),2)>=F_LOW) & (tmp(1:(idx-1),2)<=F_HIGH) & ismember(tmp(1:(idx-1),4),CHANNELS));
           data(i).MT_next=tmp(idx2,:);
-          data(i).MT_next(:,1)=data(i).MT_next(:,1)-(chunk_curr-1)*CHUNK_TIME(i);
+          data(i).MT_next(:,1)=data(i).MT_next(:,1)-(chunk_curr-1)*CHUNK_TIME_WINDOWS(i);
           fseek(fid(i),-(size(tmp,1)-idx+1)*4*8,'cof');
           break;
         end
@@ -187,7 +188,7 @@ while ~eof
     end
 
     sizeF=ceil(F_HIGH/df)-floor(F_LOW/df)+2*floor(maxNFFT/minNFFT/2)+1;
-    sizeT=CHUNK_TIME(1)+2*floor(maxNFFT/minNFFT/2)+1;
+    sizeT=CHUNK_TIME_WINDOWS(1)+2*floor(maxNFFT/minNFFT/2)+1;
     im_next=false(sizeF,sizeT);
 
     for k=1:length(data)
@@ -240,14 +241,14 @@ while ~eof
         if(sum(cj<=((CONV_SIZE(2)-1)/2))==0)  j=j+1;  continue;  end
         %if((max(ri) < (min(rj)-1)) || (max(rj) < (min(ri)-1)))  j=j+1;  continue;  end
         %cj=cj+chunk_splits(k+1)-chunk_splits(k);
-        cj=cj+CHUNK_TIME(1);
+        cj=cj+CHUNK_TIME_WINDOWS(1);
         min(min((repmat(ri,1,length(rj))-repmat(rj',length(ri),1)).^2 + ...
                 (repmat(ci,1,length(cj))-repmat(cj',length(ci),1)).^2));
         if ans<=2
           %disp(['unsplitting syllable between chunks #' num2str(k) '-' num2str(k+1)]);
           flag=1;
           syls.PixelIdxList{i}=[syls.PixelIdxList{i}; ...
-              syls_next.PixelIdxList{j}+CHUNK_TIME(1)*syls.ImageSize(1)];
+              syls_next.PixelIdxList{j}+CHUNK_TIME_WINDOWS(1)*syls.ImageSize(1)];
           syls_next.PixelIdxList(j)=[];
           syls_next.NumObjects=syls_next.NumObjects-1;
         else
@@ -278,7 +279,7 @@ while ~eof
       [r c]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
       idx=ismember(foo,[c r],'rows');
       foo=data(j).MT(idx,1:3);
-      foo(:,1)=foo(:,1)+(chunk_curr-2)*CHUNK_TIME(j);  % +1?
+      foo(:,1)=foo(:,1)+(chunk_curr-2)*CHUNK_TIME_WINDOWS(j);  % +1?
       foo(:,1)=foo(:,1).*data(j).NFFT/2/FS;
       tmp=[tmp; foo];
     end
@@ -401,7 +402,7 @@ while ~eof
   %%tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
   tmp(:,3)=tmp(:,3)-CONV_SIZE(2)+1;
   skytruth=[skytruth; ...
-      ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*CHUNK_TIME(1))*minNFFT/2/FS ...
+      ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1))*minNFFT/2/FS ...
       zeros(size(tmp,1),1) ...
       [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
   freqtruth={freqtruth{:} freq_contour{:}};
@@ -442,7 +443,7 @@ while ~eof
     clf;  hold on;
 
     [r,c]=ind2sub(syls.ImageSize,cat(1,syls.PixelIdxList{:}));
-    c=c-(CONV_SIZE(2)-1)/2+(chunk_curr-2)*CHUNK_TIME(1);
+    c=c-(CONV_SIZE(2)-1)/2+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1);
     plot(c.*(minNFFT/2)./FS,r.*df+F_LOW,'kx');
 
     for i=1:length(syls2)
@@ -452,8 +453,8 @@ while ~eof
     end
 
     if(GROUNDTRUTH)
-      left =(chunk_curr-2)*CHUNK_TIME(end)*maxNFFT/2/FS;
-      right=(chunk_curr-1)*CHUNK_TIME(end)*maxNFFT/2/FS;
+      left =(chunk_curr-2)*CHUNK_TIME_WINDOWS(end)*maxNFFT/2/FS;
+      right=(chunk_curr-1)*CHUNK_TIME_WINDOWS(end)*maxNFFT/2/FS;
       idx=find(((groundtruth(:,1)>=left) & (groundtruth(:,1)<=right)) | ...
                ((groundtruth(:,2)>=left) & (groundtruth(:,2)<=right)));
       if(~isempty(idx))
