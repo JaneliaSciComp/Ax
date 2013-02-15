@@ -139,7 +139,7 @@ CHUNK_TIME_SEC=10;  % sec
 CHUNK_TIME_WINDOWS=round(CHUNK_TIME_SEC*FS/(maxNFFT/2))*maxNFFT./[data.NFFT];  % in units of windows
 skytruth=[];
 freqtruth={};
-MERGE_TIME=MERGE_TIME*FS/minNFFT*2;
+MERGE_TIME_WINDOWS=MERGE_TIME*FS/minNFFT*2;
 voc_num=1;
 hit_num=1;
 miss_num=1;
@@ -347,7 +347,7 @@ while ~eof
   end
 
   %merge temporally nearby syllables...
-  if(MERGE_TIME~=0)
+  if(MERGE_TIME_WINDOWS~=0)
     %disp('merge temporally nearby syllables...');
     syls3=ones(1,length(syls2));
     for i=1:(length(syls2)-1)
@@ -357,8 +357,8 @@ while ~eof
         flag=0;
         for j=(i+1):length(syls2)
           if(isempty(syls.PixelIdxList{j}))  continue;  end
-          if(((sum(syls2(i).BoundingBox([1 3]))+MERGE_TIME) > syls2(j).BoundingBox(1)) &&...
-             ((sum(syls2(j).BoundingBox([1 3]))+MERGE_TIME) > syls2(i).BoundingBox(1)))
+          if(((sum(syls2(i).BoundingBox([1 3]))+MERGE_TIME_WINDOWS) > syls2(j).BoundingBox(1)) &&...
+             ((sum(syls2(j).BoundingBox([1 3]))+MERGE_TIME_WINDOWS) > syls2(i).BoundingBox(1)))
             flag=1;
             syls.PixelIdxList{i}=[syls.PixelIdxList{i}; syls.PixelIdxList{j}];
             syls.PixelIdxList{j}=[];
@@ -551,7 +551,7 @@ fprintf(fid,'%s=[%g %g];\n',varname(CONV_SIZE),CONV_SIZE);
 fprintf(fid,'%s=%g;\n',varname(F_LOW),F_LOW);
 fprintf(fid,'%s=%g;\n',varname(F_HIGH),F_HIGH);
 fprintf(fid,'%s=%g;\n',varname(NSEG),NSEG);
-fprintf(fid,'%s=[%g];\n',varname(MERGE_TIME),MERGE_TIME);
+fprintf(fid,'%s=%g;\n',varname(MERGE_TIME),MERGE_TIME);
 fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ),MERGE_FREQ);
 fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ_OVERLAP),MERGE_FREQ_OVERLAP);
 fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ_RATIO),MERGE_FREQ_RATIO);
