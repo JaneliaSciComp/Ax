@@ -138,7 +138,8 @@ FS=data(1).FS;
 CHUNK_TIME_SEC=10;  % sec
 CHUNK_TIME_WINDOWS=round(CHUNK_TIME_SEC*FS/(maxNFFT/2))*maxNFFT./[data.NFFT];  % in units of windows
 skytruth=[];
-freqtruth={};
+freq_contours={};
+freq_histograms={};
 MERGE_TIME_WINDOWS=MERGE_TIME*FS/minNFFT*2;
 voc_num=1;
 hit_num=1;
@@ -265,8 +266,9 @@ while ~eof
   syls.PixelIdxList=syls.PixelIdxList(tmp);
   syls.NumObjects=length(tmp);
 
-  %calculate frequency contours
+  %calculate frequency contours (and histograms)
   freq_contour={};
+  freq_histogram={};
   for i=1:length(syls2)
     tmp=[];
     for j=1:length(data)
@@ -285,13 +287,16 @@ while ~eof
     end
     tmp=sortrows(tmp);
     freq_contour{i}{1}=zeros(length(unique(tmp(:,1))),3);
+    pooh=[];
     j=1;  l=1;
     while(j<=size(tmp,1))
       k=j+1;  while((k<=size(tmp,1)) && (tmp(j,1)==tmp(k,1)))  k=k+1;  end
       [~, idx]=max(tmp(j:(k-1),3));
       freq_contour{i}{1}(l,:)=tmp(j+idx-1,:);
+      pooh=[pooh; tmp(j:(k-1),2)-tmp(j+idx-1,2)];
       j=k;  l=l+1;
     end
+    freq_histogram{i}(1)=sum(pooh==0)/length(pooh);
   end
 
   %merge harmonically related syllables...
@@ -335,6 +340,8 @@ while ~eof
             syls3(j)=0;
             freq_contour{i}={freq_contour{i}{:} freq_contour{j}{:}};
             freq_contour{j}=[];
+            freq_histogram{i}=[freq_histogram{i} freq_histogram{j}];
+            freq_histogram{j}=[];
           end
         end
       end
@@ -344,6 +351,7 @@ while ~eof
     syls.PixelIdxList={syls.PixelIdxList{idx}};
     syls2=regionprops(syls,'basic');
     freq_contour={freq_contour{idx}};
+    freq_histogram={freq_histogram{idx}};
   end
 
   %merge temporally nearby syllables...
@@ -376,6 +384,8 @@ while ~eof
             syls3(j)=0;
             freq_contour{i}={freq_contour{i}{:} freq_contour{j}{:}};
             freq_contour{j}=[];
+            freq_histogram{i}=[freq_histogram{i} freq_histogram{j}];
+            freq_histogram{j}=[];
           end
         end
       end
@@ -385,6 +395,7 @@ while ~eof
     syls.PixelIdxList={syls.PixelIdxList{idx}};
     syls2=regionprops(syls,'basic');
     freq_contour={freq_contour{idx}};
+    freq_histogram={freq_histogram{idx}};
   end
 
   %cull short syllables...
@@ -396,6 +407,7 @@ while ~eof
     syls.PixelIdxList={syls.PixelIdxList{idx}};
     syls2=regionprops(syls,'basic');
     freq_contour={freq_contour{idx}};
+    freq_histogram={freq_histogram{idx}};
   end
 
   tmp=reshape([syls2.BoundingBox],4,length(syls2))';
@@ -405,7 +417,8 @@ while ~eof
       ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1))*minNFFT/2/FS ...
       zeros(size(tmp,1),1) ...
       [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
-  freqtruth={freqtruth{:} freq_contour{:}};
+  freq_contours={freq_contours{:} freq_contour{:}};
+  freq_histograms={freq_histograms{:} freq_histogram{:}};
 
   %compare to ground truth
   if(GROUNDTRUTH)
@@ -447,8 +460,8 @@ while ~eof
     plot(c.*(minNFFT/2)./FS,r.*df+F_LOW,'kx');
 
     for i=1:length(syls2)
-      for j=1:length(freqtruth{end-i+1})
-        plot(freqtruth{end-i+1}{j}(:,1),freqtruth{end-i+1}{j}(:,2),'r-');
+      for j=1:length(freq_contours{end-i+1})
+        plot(freq_contours{end-i+1}{j}(:,1),freq_contours{end-i+1}{j}(:,2),'r-');
       end
     end
 
@@ -529,7 +542,8 @@ end
 
 tmp=[skytruth(:,1:2) skytruth(:,4:5)];
 save([filename '.voc' sprintf('%d',CHANNELS)],'tmp','-ascii');
-save([filename '.fc' sprintf('%d',CHANNELS)],'freqtruth');
+save([filename '.fc' sprintf('%d',CHANNELS)],'freq_contours');
+save([filename '.fh' sprintf('%d',CHANNELS)],'freq_histograms');
 if(GROUNDTRUTH)
   tmp=groundtruth(misses,1:2);
   save([filename '.miss' sprintf('%d',CHANNELS)],'tmp','-ascii');
