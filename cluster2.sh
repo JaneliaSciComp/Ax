@@ -18,6 +18,6 @@ if [ -d MCR_CACHE_ROOT ]
     rm -rf $MCR_CACHE_ROOT
 fi
 
-./mtbp/distrib/run_mtbp.sh /usr/local/matlab-2012a $1 $2 $3 $4 $5 $6 $7 $8 $9
+./ax/run_ax.sh /usr/local/matlab-2012b $1 $2 $3 $4 $5 $6 $7 $8 $9
 
 rm -rf $MCR_CACHE_ROOT

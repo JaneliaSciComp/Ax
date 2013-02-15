@@ -7,7 +7,7 @@
 #   ./cluster.sh  ./ultrasonic_parameters.m  /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/
 #   ./cluster.sh  ./ultrasonic_parameters.m  /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/Test_B_1
 
-# FS, NW, K, PVAL, and NFFT specify the parameters to each call of mtbp().
+# FS, NW, K, PVAL, and NFFT specify the parameters to each call of ax().
 # if any are a scalar the same value is used for each call.  those which are
 # arrays must have the same length.
 
@@ -55,7 +55,7 @@ fi
 #echo ${PVAL[@]}
 #echo ${NFFT[@]}
 
-# launch one instance of mtbp() per set of params
+# launch one instance of ax() per set of params
 if [ -d $2 ] ; then
   ii=$(ls -1 $2/*.ch* | sed s/.ch[0-9]// | uniq)
   dir_name=$2
