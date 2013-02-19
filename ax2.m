@@ -18,10 +18,11 @@
 %channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
 %data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
 %
-%three files are output:
-%.voc: an Mx4 array whose columns are the start & stop times (sec), and low & high frequences (Hz)
-%.fc: a cell array (vocalizations) of cell arrays (syllables) of Nx3 arrays (time[s], freq[Hz], amplitude)
-%.params: a .m file of the parameters used
+%four files are output:
+%voc: an Mx4 array whose columns are the start & stop times (sec), and low & high frequences (Hz)
+%fc: a cell array (vocalizations) of cell arrays (syllables) of Nx3 arrays (time[s], freq[Hz], amplitude)
+%fh: a cell array (vocalizations) of cell arrays (syllables) of spectral purity quotients
+%params: a .m file of the parameters used
 
 %for ultrasonic:
 %ax2(20e3, 120e3, [15 7], 1500, 0, 0.9, 0.1, 0.9, 0, 1, 0,...
@@ -541,18 +542,21 @@ else
 end
 
 tmp=[skytruth(:,1:2) skytruth(:,4:5)];
-save([filename '.voc' sprintf('%d',CHANNELS)],'tmp','-ascii');
-save([filename '.fc' sprintf('%d',CHANNELS)],'freq_contours');
-save([filename '.fh' sprintf('%d',CHANNELS)],'freq_histograms');
+[p,n,e]=fileparts(filename);
+directory=fullfile(p,[n '-out' datestr(now,30)]);
+mkdir(directory);
+save(fullfile(directory,['voc' sprintf('%d',CHANNELS) '.txt']),'tmp','-ascii');
+save(fullfile(directory,['fc' sprintf('%d',CHANNELS)]),'freq_contours');
+save(fullfile(directory,['fh' sprintf('%d',CHANNELS)]),'freq_histograms');
 if(GROUNDTRUTH)
   tmp=groundtruth(misses,1:2);
-  save([filename '.miss' sprintf('%d',CHANNELS)],'tmp','-ascii');
+  save(fullfile(directory,['miss' sprintf('%d',CHANNELS) '.txt']),'tmp','-ascii');
   tmp=[skytruth(false_alarms,1:2) skytruth(false_alarms,4:5)];
-  save([filename '.fa' sprintf('%d',CHANNELS)],'tmp','-ascii');
+  save(fullfile(directory,['fa' sprintf('%d',CHANNELS) '.txt']),'tmp','-ascii');
 end
 
 varname=@(x) inputname(1);
-fid=fopen([filename '.params' sprintf('%d',CHANNELS)],'w');
+fid=fopen(fullfile(directory,['params' sprintf('%d',CHANNELS) '.m']),'w');
 for i=1:length(data)
   jj=fieldnames(data(i));
   for j=1:length(jj)-2
