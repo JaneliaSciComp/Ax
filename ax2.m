@@ -311,17 +311,24 @@ while ~eof
         flag=0;
         for j=(i+1):length(syls2)
           if(isempty(syls.PixelIdxList{j}))  continue;  end
-          doit=false;
+          doit=false;  position=nan(1,length(freq_contour{i}));
           for k=1:length(freq_contour{i})
             [c,ii,jj]=intersect(freq_contour{i}{k}(:,1),freq_contour{j}{1}(:,1));
             if((length(c)/size(freq_contour{i}{k},1)<MERGE_FREQ_OVERLAP) && ...
                (length(c)/size(freq_contour{j}{1},1)<MERGE_FREQ_OVERLAP))
               continue;
             end
-            doit=doit | ...
-                sum(sum(abs((freq_contour{i}{k}(ii,2)./freq_contour{j}{1}(jj,2))*...
-                    [1/3 1/2 2 3 2/3 3/2]-1)<MERGE_FREQ_RATIO)...
-                >(MERGE_FREQ_FRACTION*length(c)));
+            %doit=doit | ...
+            %    sum(sum(abs((freq_contour{i}{k}(ii,2)./freq_contour{j}{1}(jj,2))*...
+            %        [1/3 1/2 2/3 3/2 2 3]-1)<MERGE_FREQ_RATIO)...
+            %    >(MERGE_FREQ_FRACTION*length(c)));
+            sum(abs((freq_contour{i}{k}(ii,2)./freq_contour{j}{1}(jj,2))*...
+                [1/3 1/2 2/3 3/2 2 3]-1)<MERGE_FREQ_RATIO)>(MERGE_FREQ_FRACTION*length(c));
+            doit=doit | sum(ans);
+            find(ans,1,'first');
+            if(~isempty(ans))
+              position(k)=ans<4;
+            end
           end
           if(doit)
             flag=1;
@@ -339,9 +346,10 @@ while ~eof
                 syls2(i).BoundingBox(2);
             syls3(i)=syls3(i)+syls3(j);
             syls3(j)=0;
-            freq_contour{i}={freq_contour{i}{:} freq_contour{j}{:}};
+            find(position,1,'first');  if(isempty(ans))  length(freq_contour{i})+1;  end
+            freq_contour{i}={freq_contour{i}{1:(ans-1)} freq_contour{j}{:} freq_contour{i}{ans:end}};
             freq_contour{j}=[];
-            freq_histogram{i}=[freq_histogram{i} freq_histogram{j}];
+            freq_histogram{i}=[freq_histogram{i}(1:(ans-1)) freq_histogram{j}(ans:end)];
             freq_histogram{j}=[];
           end
         end
