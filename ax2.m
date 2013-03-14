@@ -166,14 +166,14 @@ eof=false;  count=4*CHUNK_FILE;
 chunk_curr=1;
 while ~eof
   if(toc>10)  disp([num2str(num) ': ' num2str(chunk_curr*CHUNK_TIME_SEC) ' sec chunk']);  tic;  end;
-  eof=(max(count)<4*CHUNK_FILE);
 
   %collapse across channels and window sizes
-  if ~eof
+%  if ~eof
     for i=1:length(data)
       tmp=[];  data(i).MT_next=[];
       while ~feof(fid(i))
         [foo,count(i)]=fread(fid(i),[4 CHUNK_FILE],'double');
+        if(isempty(foo))  continue;  end
         tmp=[tmp; foo'];
         idx=find(tmp(:,1)>chunk_curr*CHUNK_TIME_WINDOWS(i),1);
         if(feof(fid(i)) && isempty(idx))
@@ -212,13 +212,13 @@ while ~eof
 
     %segment
     syls_next=bwconncomp(im_next,8);
-  else
-    for i=1:length(data)
-      data(i).MT_next=[];
-    end
-    im_next=[];
-    syls_next=[];
-  end
+%  else
+%    for i=1:length(data)
+%      data(i).MT_next=[];
+%    end
+%    im_next=[];
+%    syls_next=[];
+%  end
 
   if(exist('syls')==0)
     for i=1:length(data)
@@ -229,6 +229,8 @@ while ~eof
     chunk_curr=chunk_curr+1;
     continue;
   end
+
+  eof=(max(count)<4*CHUNK_FILE);
 
   %unsplit across chunk boundaries
   flag=1;
