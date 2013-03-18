@@ -8,9 +8,9 @@
 %conv_size is [height_freq width_time] in pixels, each must be odd
 %obj_size is in pixels
 %set merge_freq to 1 to collapse harmonically related syllables, 0 otherwise
-%merge_freq_overlap is the fraction in time two segments must overlap
-%merge_freq_ratio is the tolerance in frequency ratio two segments must be within
-%merge_freq_fraction is the fraction of the overlap the must be within the tolerance
+%  merge_freq_overlap is the fraction in time two segments must overlap
+%  merge_freq_ratio is the tolerance in frequency ratio two segments must be within
+%  merge_freq_fraction is the fraction of the overlap that must be within the ratio tolerance
 %merge_time is the maximum gap length, in seconds, below which vocalizations
 %  are combined;  use 0 to not combine
 %nseg is the minimum number of merged segements a vocalization must contain
@@ -56,6 +56,47 @@ switch nargin
     data_path=varargin{13};
   otherwise
     error('invalid args');
+end
+
+if(isempty(f_low) || isempty(f_high) || (f_low<0) || (f_high<0) || (f_low>=f_high))
+  error('f_low should be less than f_high and both should be non-negative real numbers');
+end
+
+if(isempty(conv_size) || (length(conv_size)~=2) || ...
+      (sum(~mod(conv_size,2))~=0) || (sum(conv_size<0)>0) || (sum(conv_size~=round(conv_size))>0))
+  error('conv_size should be a 2-vector of odd positive integers');
+end
+
+if(isempty(obj_size) || (obj_size<0) || (obj_size~=round(obj_size)))
+  error('obj_size should be a non-negative integer');
+end
+
+if (isempty(merge_freq) || ((merge_freq~=0) && (merge_freq~=1)))
+  error('merge_freq must be 0 or 1');
+end
+
+if (isempty(merge_freq_overlap) || ((merge_freq_overlap<0) || (merge_freq_overlap>1)))
+  error('merge_freq_overlap must be between 0 and 1');
+end
+
+if (isempty(merge_freq_ratio) || (merge_freq_ratio<0))
+  error('merge_freq_ratio must be a non-negative real number');
+end
+
+if (isempty(merge_freq_fraction) || (merge_freq_fraction<0) || (merge_freq_fraction>1))
+  error('merge_freq_fraction must be between 0 and 1');
+end
+
+if (isempty(merge_time) || (merge_time<0))
+  error('merge_time must be a non-negative real number');
+end
+
+if (isempty(nseg) || (nseg~=round(nseg)) || (nseg<1))
+  warndlg('nseg must be a positive integer');
+end
+
+if (isempty(min_length) || (min_length<0))
+  warndlg('min_length must be a non-negative real number');
 end
 
 tmp=dir(fullfile(data_path,'*.ax'));
@@ -411,7 +452,7 @@ while ~eof
 
   %cull short syllables...
   if(MIN_LENGTH>0)
-    disp('cull short syllables...');
+    %disp('cull short syllables...');
     reshape([syls2.BoundingBox],4,length(syls2))';
     idx=find(((ans(:,3)-CONV_SIZE(2)+1)*minNFFT/2/FS)>MIN_LENGTH);
     syls.NumObjects=length(idx);
