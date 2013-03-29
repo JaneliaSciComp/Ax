@@ -194,6 +194,10 @@ miss_num=1;
 fa_num=1;
 CHUNK_FILE=1024;
 
+[p,n,e]=fileparts(filename);
+directory=fullfile(p,[n '-out' datestr(now,30)]);
+mkdir(directory);
+
 if(GROUNDTRUTH)
   groundtruth=load([filename '.gnd']);
   groundtruth=groundtruth(:,2:3);
@@ -327,7 +331,8 @@ while ~eof
 %               ((tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2+floor(tmpT/2))<=sum(syls2(i).BoundingBox([1 3]))) & ...
 %                (data(j).MT(:,2)>=(syls2(i).BoundingBox(2)*df+F_LOW)) & ...
 %                (data(j).MT(:,2)<=(sum(syls2(i).BoundingBox([2 4]))*df+F_LOW)));
-      foo=[tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2 round(data(j).MT(:,2)/df)-floor(F_LOW/df)];
+      foo=[tmpT*data(j).MT(:,1)+floor(maxNFFT/minNFFT/2)+1+(CONV_SIZE(2)-1)/2 ...
+           round(data(j).MT(:,2)/df)-floor(F_LOW/df)+floor(maxNFFT/minNFFT/2)+1];
       [r c]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
       idx=ismember(foo,[c r],'rows');
       foo=data(j).MT(idx,1:4);
@@ -475,9 +480,10 @@ while ~eof
     freq_contour2={freq_contour2{idx}};
     freq_histogram={freq_histogram{idx}};
   end
-
   tmp=reshape([syls2.BoundingBox],4,length(syls2))';
-  %%tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
+  %tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
+  tmp(:,1)=tmp(:,1)-floor(maxNFFT/minNFFT/2)-1;
+  tmp(:,2)=tmp(:,2)-floor(maxNFFT/minNFFT/2)-1;
   tmp(:,3)=tmp(:,3)-CONV_SIZE(2)+1;
   skytruth=[skytruth; ...
       ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1))*minNFFT/2/FS ...
@@ -524,11 +530,14 @@ while ~eof
 
     [r,c]=ind2sub(syls.ImageSize,cat(1,syls.PixelIdxList{:}));
     c=c-(CONV_SIZE(2)-1)/2+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1);
-    plot(c.*(minNFFT/2)./FS,r.*df+F_LOW,'kx');
+    c=c-floor(maxNFFT/minNFFT/2)-1;
+    r=r-floor(maxNFFT/minNFFT/2)-1;
+    plot(c.*(minNFFT/2)./FS,r.*df+F_LOW,'bo');
 
     for i=1:length(syls2)
       for j=1:length(freq_contours{end-i+1})
         plot(freq_contours{end-i+1}{j}(:,1),freq_contours{end-i+1}{j}(:,2),'r-');
+        plot(freq_contours2{end-i+1}{j}(:,1),freq_contours2{end-i+1}{j}(:,2),'g.');
       end
     end
 
@@ -561,28 +570,28 @@ while ~eof
       while voc_num<=min([200 size(skytruth,1)])
         left=skytruth(voc_num,1);
         right=skytruth(voc_num,2);
-        ax2_print(voc_num,left,right,'voc',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
+        ax2_print(voc_num,left,right,'voc',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
         voc_num=voc_num+1;
       end
     else
       while hit_num<=min([20 length(hits)])
         left =min([groundtruth(hits(hit_num),1) skytruth(groundtruth(hits(hit_num),3),1)]);
         right=max([groundtruth(hits(hit_num),2) skytruth(groundtruth(hits(hit_num),3),2)]);
-        ax2_print(hit_num,left,right,'hit',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
+        ax2_print(hit_num,left,right,'hit',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
         hit_num=hit_num+1;
       end
 
       while miss_num<=min([100 size(misses,1)])
         left=groundtruth(misses(miss_num),1);
         right=groundtruth(misses(miss_num),2);
-        ax2_print(miss_num,left,right,'miss',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
+        ax2_print(miss_num,left,right,'miss',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
         miss_num=miss_num+1;
       end
 
       while fa_num<=min([100 size(false_alarms,1)])
         left=skytruth(false_alarms(fa_num),1);
         right=skytruth(false_alarms(fa_num),2);
-        ax2_print(fa_num,left,right,'false_alarm',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
+        ax2_print(fa_num,left,right,'false_alarm',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
         fa_num=fa_num+1;
       end
     end
@@ -608,9 +617,6 @@ else
 end
 
 tmp=[skytruth(:,1:2) skytruth(:,4:5)];
-[p,n,e]=fileparts(filename);
-directory=fullfile(p,[n '-out' datestr(now,30)]);
-mkdir(directory);
 save(fullfile(directory,'voc.txt'),'tmp','-ascii');
 save(fullfile(directory,'fc'),'freq_contours');
 save(fullfile(directory,'fc2'),'freq_contours2');
@@ -647,7 +653,7 @@ fclose(fid);
 
 
 
-function ax2_print(i,left,right,type,filename,FS,NFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS)
+function ax2_print(i,left,right,type,filename,directory,FS,NFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS)
 
 tmp=[];  p=[];
 for j=CHANNELS
@@ -659,7 +665,7 @@ for j=CHANNELS
   if(SAVE_WAV)
     tmp2=filtfilt(b,a,tmp);
     tmp2=tmp2./max([max(tmp2)-min(tmp2)]);
-    wavwrite(tmp2,22000,[fileparts(filename) '/' type num2str(i) '.ch' num2str(j) '.wav']);
+    wavwrite(tmp2,22000,[directory '/' type num2str(i) '.ch' num2str(j) '.wav']);
   end
   [s,f,t,p(j,:,:)]=spectrogram(tmp,NFFT,[],[],FS,'yaxis');
 end
@@ -677,5 +683,5 @@ axis tight;
 set(gca,'xlim',[left right]+[-0.025 0.025]);
 title([type ' #' num2str(i)]);
 drawnow;
-if(SAVE_PNG)  print('-dpng',[fileparts(filename) '/' type num2str(i) '.png']);  end
+if(SAVE_PNG)  print('-dpng',[directory '/' type num2str(i) '.png']);  end
 delete(h);
