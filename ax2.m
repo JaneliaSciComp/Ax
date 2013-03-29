@@ -4,25 +4,26 @@
 %    channels, data_path)
 %function ax2(params_file, data_path)
 %
-%f_low, f_high are in Hz
-%conv_size is [height_freq width_time] in pixels, each must be odd
-%obj_size is in pixels
-%set merge_freq to 1 to collapse harmonically related syllables, 0 otherwise
-%  merge_freq_overlap is the fraction in time two segments must overlap
-%  merge_freq_ratio is the tolerance in frequency ratio two segments must be within
-%  merge_freq_fraction is the fraction of the overlap that must be within the ratio tolerance
-%merge_time is the maximum gap length, in seconds, below which vocalizations
-%  are combined;  use 0 to not combine
-%nseg is the minimum number of merged segements a vocalization must contain
-%min_length is the minimum syllable length in sec
-%channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
-%data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
+%input arguments:
+%  f_low, f_high are in Hz
+%  conv_size is [height_freq width_time] in pixels, each must be odd
+%  obj_size is in pixels
+%  set merge_freq to 1 to collapse harmonically related syllables, 0 otherwise
+%    merge_freq_overlap is the fraction in time two segments must overlap
+%    merge_freq_ratio is the tolerance in frequency ratio two segments must be within
+%    merge_freq_fraction is the fraction of the overlap that must be within the ratio tolerance
+%  merge_time is the maximum gap length, in seconds, below which vocalizations
+%    are combined;  use 0 to not combine
+%  nseg is the minimum number of merged segements a vocalization must contain
+%  min_length is the minimum syllable length in sec
+%  channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
+%  data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
 %
 %four files are output:
-%voc: an Mx4 array whose columns are the start & stop times (sec), and low & high frequences (Hz)
-%fc: a cell array (vocalizations) of cell arrays (syllables) of Nx3 arrays (time[s], freq[Hz], amplitude)
-%fh: a cell array (vocalizations) of cell arrays (syllables) of spectral purity quotients
-%params: a .m file of the parameters used
+%  voc: an Mx4 array whose columns are the start & stop times (sec), and low & high frequences (Hz)
+%  fc: a cell array (vocalizations) of cell arrays (syllables) of Nx3 arrays (time[s], freq[Hz], amplitude)
+%  fh: a cell array (vocalizations) of cell arrays (syllables) of spectral purity quotients
+%  params: a .m file of the parameters used
 
 %for ultrasonic:
 %ax2(20e3, 120e3, [15 7], 1500, 0, 0.9, 0.1, 0.9, 0, 1, 0,...
@@ -596,18 +597,19 @@ tmp=[skytruth(:,1:2) skytruth(:,4:5)];
 [p,n,e]=fileparts(filename);
 directory=fullfile(p,[n '-out' datestr(now,30)]);
 mkdir(directory);
-save(fullfile(directory,['voc' sprintf('%d',CHANNELS) '.txt']),'tmp','-ascii');
-save(fullfile(directory,['fc' sprintf('%d',CHANNELS)]),'freq_contours');
-save(fullfile(directory,['fh' sprintf('%d',CHANNELS)]),'freq_histograms');
+save(fullfile(directory,'voc.txt'),'tmp','-ascii');
+save(fullfile(directory,'fc'),'freq_contours');
+save(fullfile(directory,'fh'),'freq_histograms');
 if(GROUNDTRUTH)
   tmp=groundtruth(misses,1:2);
-  save(fullfile(directory,['miss' sprintf('%d',CHANNELS) '.txt']),'tmp','-ascii');
+  save(fullfile(directory,'miss.txt'),'tmp','-ascii');
   tmp=[skytruth(false_alarms,1:2) skytruth(false_alarms,4:5)];
-  save(fullfile(directory,['fa' sprintf('%d',CHANNELS) '.txt']),'tmp','-ascii');
+  save(fullfile(directory,'fa.txt'),'tmp','-ascii');
 end
 
 varname=@(x) inputname(1);
-fid=fopen(fullfile(directory,['params' sprintf('%d',CHANNELS) '.m']),'w');
+%fid=fopen(fullfile(directory,['params' sprintf('%d',CHANNELS) '.m']),'w');
+fid=fopen(fullfile(directory,'params.m'),'w');
 for i=1:length(data)
   jj=fieldnames(data(i));
   for j=1:length(jj)-2
