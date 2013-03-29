@@ -21,7 +21,10 @@
 %
 %four files are output:
 %  voc: an Mx4 array whose columns are the start & stop times (sec), and low & high frequences (Hz)
-%  fc: a cell array (vocalizations) of cell arrays (syllables) of Nx3 arrays (time[s], freq[Hz], amplitude)
+%  fc: a cell array (vocs) of cell arrays (syls) of Nx3 arrays (time[s], freq[Hz], amplitude)
+%      of the hot pixel in each time slice with the max amplitude
+%  fc2: a cell array (vocs) of cell arrays (syls) of Nx4 arrays (time[s], freq[Hz], amplitude, channel)
+%      of all hot pixels
 %  fh: a cell array (vocalizations) of cell arrays (syllables) of spectral purity quotients
 %  params: a .m file of the parameters used
 
@@ -182,6 +185,7 @@ CHUNK_TIME_SEC=10;  % sec
 CHUNK_TIME_WINDOWS=round(CHUNK_TIME_SEC*FS/(maxNFFT/2))*maxNFFT./[data.NFFT];  % in units of windows
 skytruth=[];
 freq_contours={};
+freq_contours2={};
 freq_histograms={};
 MERGE_TIME_WINDOWS=MERGE_TIME*FS/minNFFT*2;
 voc_num=1;
@@ -313,6 +317,7 @@ while ~eof
 
   %calculate frequency contours (and histograms)
   freq_contour={};
+  freq_contour2={};
   freq_histogram={};
   for i=1:length(syls2)
     tmp=[];
@@ -325,19 +330,20 @@ while ~eof
       foo=[tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2 round(data(j).MT(:,2)/df)-floor(F_LOW/df)];
       [r c]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
       idx=ismember(foo,[c r],'rows');
-      foo=data(j).MT(idx,1:3);
+      foo=data(j).MT(idx,1:4);
       foo(:,1)=foo(:,1)+(chunk_curr-2)*CHUNK_TIME_WINDOWS(j);  % +1?
       foo(:,1)=foo(:,1).*data(j).NFFT/2/FS;
       tmp=[tmp; foo];
     end
     tmp=sortrows(tmp);
     freq_contour{i}{1}=zeros(length(unique(tmp(:,1))),3);
+    freq_contour2{i}{1}=tmp;
     pooh=[];
     j=1;  l=1;
     while(j<=size(tmp,1))
       k=j+1;  while((k<=size(tmp,1)) && (tmp(j,1)==tmp(k,1)))  k=k+1;  end
       [~, idx]=max(tmp(j:(k-1),3));
-      freq_contour{i}{1}(l,:)=tmp(j+idx-1,:);
+      freq_contour{i}{1}(l,:)=tmp(j+idx-1,1:3);
       pooh=[pooh; tmp(j:(k-1),2)-tmp(j+idx-1,2)];
       j=k;  l=l+1;
     end
@@ -393,6 +399,8 @@ while ~eof
             find(position,1,'first');  if(isempty(ans))  length(freq_contour{i})+1;  end
             freq_contour{i}={freq_contour{i}{1:(ans-1)} freq_contour{j}{:} freq_contour{i}{ans:end}};
             freq_contour{j}=[];
+            freq_contour2{i}={freq_contour2{i}{1:(ans-1)} freq_contour2{j}{:} freq_contour2{i}{ans:end}};
+            freq_contour2{j}=[];
             freq_histogram{i}=[freq_histogram{i}(1:(ans-1)) freq_histogram{j}(ans:end)];
             freq_histogram{j}=[];
           end
@@ -404,6 +412,7 @@ while ~eof
     syls.PixelIdxList={syls.PixelIdxList{idx}};
     syls2=regionprops(syls,'basic');
     freq_contour={freq_contour{idx}};
+    freq_contour2={freq_contour2{idx}};
     freq_histogram={freq_histogram{idx}};
   end
 
@@ -437,6 +446,8 @@ while ~eof
             syls3(j)=0;
             freq_contour{i}={freq_contour{i}{:} freq_contour{j}{:}};
             freq_contour{j}=[];
+            freq_contour2{i}={freq_contour2{i}{:} freq_contour2{j}{:}};
+            freq_contour2{j}=[];
             freq_histogram{i}=[freq_histogram{i} freq_histogram{j}];
             freq_histogram{j}=[];
           end
@@ -448,6 +459,7 @@ while ~eof
     syls.PixelIdxList={syls.PixelIdxList{idx}};
     syls2=regionprops(syls,'basic');
     freq_contour={freq_contour{idx}};
+    freq_contour2={freq_contour2{idx}};
     freq_histogram={freq_histogram{idx}};
   end
 
@@ -460,6 +472,7 @@ while ~eof
     syls.PixelIdxList={syls.PixelIdxList{idx}};
     syls2=regionprops(syls,'basic');
     freq_contour={freq_contour{idx}};
+    freq_contour2={freq_contour2{idx}};
     freq_histogram={freq_histogram{idx}};
   end
 
@@ -471,6 +484,7 @@ while ~eof
       zeros(size(tmp,1),1) ...
       [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
   freq_contours={freq_contours{:} freq_contour{:}};
+  freq_contours2={freq_contours2{:} freq_contour2{:}};
   freq_histograms={freq_histograms{:} freq_histogram{:}};
 
   %compare to ground truth
@@ -599,6 +613,7 @@ directory=fullfile(p,[n '-out' datestr(now,30)]);
 mkdir(directory);
 save(fullfile(directory,'voc.txt'),'tmp','-ascii');
 save(fullfile(directory,'fc'),'freq_contours');
+save(fullfile(directory,'fc2'),'freq_contours2');
 save(fullfile(directory,'fh'),'freq_histograms');
 if(GROUNDTRUTH)
   tmp=groundtruth(misses,1:2);
