@@ -17,7 +17,7 @@ then
   exit
 fi
 
-eval $( sed "s/\[/\\(/g" $1 | sed "s/\]/\\)/g" )
+eval $( sed "s/\[/\\(/g" $1 | sed "s/\]/\\)/g" | dos2unix )
 
 # get maximum length of params
 tmp=(${#FS[@]} ${#NW[@]} ${#K[@]} ${#PVAL[@]} ${#NFFT[@]})
