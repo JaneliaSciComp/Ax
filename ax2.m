@@ -352,7 +352,7 @@ while ~eof
       pooh=[pooh; tmp(j:(k-1),2)-tmp(j+idx-1,2)];
       j=k;  l=l+1;
     end
-    freq_histogram{i}(1)=sum(pooh==0)/length(pooh);
+    freq_histogram{i}{1}=sum(pooh==0)/length(pooh);
   end
 
   %merge harmonically related syllables...
@@ -401,12 +401,12 @@ while ~eof
                 syls2(i).BoundingBox(2);
             syls3(i)=syls3(i)+syls3(j);
             syls3(j)=0;
-            find(position,1,'first');  if(isempty(ans))  length(freq_contour{i})+1;  end
-            freq_contour{i}={freq_contour{i}{1:(ans-1)} freq_contour{j}{:} freq_contour{i}{ans:end}};
+            tmp=find(position,1,'first');  if(isempty(tmp))  tmp=length(freq_contour{i})+1;  end
+            freq_contour{i}={freq_contour{i}{1:(tmp-1)} freq_contour{j}{:} freq_contour{i}{tmp:end}};
             freq_contour{j}=[];
-            freq_contour2{i}={freq_contour2{i}{1:(ans-1)} freq_contour2{j}{:} freq_contour2{i}{ans:end}};
+            freq_contour2{i}={freq_contour2{i}{1:(tmp-1)} freq_contour2{j}{:} freq_contour2{i}{tmp:end}};
             freq_contour2{j}=[];
-            freq_histogram{i}=[freq_histogram{i}(1:(ans-1)) freq_histogram{j}(ans:end)];
+            freq_histogram{i}=[freq_histogram{i}(1:(tmp-1)) freq_histogram{j}{:} freq_histogram{i}(tmp:end)];
             freq_histogram{j}=[];
           end
         end
