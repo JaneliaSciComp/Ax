@@ -107,7 +107,7 @@ tmp=dir(fullfile(data_path,'*.ax'));
 if(~isempty(tmp))
   datafiles=cell(1,length(tmp));
   for i=1:length(tmp)
-    [~,datafiles{i},~]=fileparts(tmp(i).name(1:end-7));
+    [~,datafiles{i},~]=fileparts(tmp(i).name(1:end-5));
   end
   datafiles=unique(datafiles);
   if(length(datafiles)>1)
