@@ -42,7 +42,19 @@ function ax2(varargin)
 
 switch nargin
   case 2
-    run(varargin{1});
+%    run(varargin{1});
+    fid = fopen(varargin{1});
+    if fid < 0
+        error('Could not open the parameters file at %s', varargin{1});
+    end
+    params_code = fread(fid, '*char')';
+    fclose(fid);
+    try
+%        disp(params_code);
+        eval(params_code);
+    catch ME
+        error('Could not load the parameters from %s (%s)', varargin{1}, ME.message);
+    end
     data_path=varargin{2};
   case 13
     f_low=varargin{1};
@@ -110,7 +122,7 @@ if(~isempty(tmp))
     [~,datafiles{i},~]=fileparts(tmp(i).name(1:end-5));
   end
   datafiles=unique(datafiles);
-  if(length(datafiles)>1)
+  if(~isdeployed && length(datafiles)>1)
     if(exist('matlabpool')==2 && matlabpool('size')==0)
       matlabpool open
     end

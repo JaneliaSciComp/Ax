@@ -1,7 +1,7 @@
-% function ax(params_file,FILEIN,FILEOUT)
-% function ax(params_file,FILEIN,FILEOUT,START,STOP)
-% function ax(FS,NFFT,NW,K,PVAL,FILEIN,FILEOUT)
-% function ax(FS,NFFT,NW,K,PVAL,FILEIN,FILEOUT,START,STOP)
+% function ax1(params_file,FILEIN,FILEOUT)
+% function ax1(params_file,FILEIN,FILEOUT,START,STOP)
+% function ax1(FS,NFFT,NW,K,PVAL,FILEIN,FILEOUT)
+% function ax1(FS,NFFT,NW,K,PVAL,FILEIN,FILEOUT,START,STOP)
 %
 % FS: sampling rate in Hertz
 % NFFT: FFT window size in seconds, rounds up to the next power of 2 tics
@@ -12,11 +12,11 @@
 %
 % output is a binary file with a time x frequency x amplitude x channel array of hot pixels
 %
-% ax('ultrasonic_params','urine','1');  % need to have just one NFFT specified
-% ax(200e3,0.001,15,29,0.01,'urine','1');
-% ax(450450,0.001,15,29,0.01,0,30,'groundtruth','1');
+% ax1('ultrasonic_params','urine','1');  % need to have just one NFFT specified
+% ax1(200e3,0.001,15,29,0.01,'urine','1');
+% ax1(450450,0.001,15,29,0.01,0,30,'groundtruth','1');
 
-function ax(varargin)
+function ax1(varargin)
 
 if((nargin~=3)&&(nargin~=5)&&(nargin~=7)&&(nargin~=9))
   error('invalid args');
@@ -63,7 +63,7 @@ if((nargin==5)||(nargin==9))
 end
 
 if(length(NFFT)>1)
-  error('multiple NFFTs not supported when calling ax() from the matlab command line');
+  error('multiple NFFTs not supported when calling ax1() from the matlab command line');
 end
 
 VERSION=1;
