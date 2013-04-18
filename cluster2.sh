@@ -22,7 +22,7 @@ fi
 
 mkdir $MCR_CACHE_ROOT
 
-./ax1/run_ax1.sh /usr/local/matlab-2013a $1 $2 $3 $4 $5 $6 $7 $8 $9
+run_ax1.sh /usr/local/matlab-2013a $1 $2 $3 $4 $5 $6 $7 $8 $9
 
 rm -rf $MCR_CACHE_ROOT
 

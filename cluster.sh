@@ -82,7 +82,7 @@ then
       qsub -N "$job_name-$j" \
           -pe batch 8 \
           -b y -j y -cwd -o "$dir_name/$job_name-$j.log" \
-          -V ./cluster2.sh "\"${FS[j]}\"" "\"${NFFT[j]}\"" "\"${NW[j]}\"" "\"${K[j]}\"" "\"${PVAL[j]}\"" "\"$i\"" "\"$j\"" "\"$4\"" "\"$5\""
+          -V cluster2.sh "\"${FS[j]}\"" "\"${NFFT[j]}\"" "\"${NW[j]}\"" "\"${K[j]}\"" "\"${PVAL[j]}\"" "\"$i\"" "\"$j\"" "\"$4\"" "\"$5\""
 #          -pe batch 12 \
 #          -l r620=true \
     done
@@ -111,7 +111,7 @@ do
   qsub -N "$job_name" \
       -pe batch 8 \
       -b y -j y -cwd -o "$dir_name/$job_name.log" \
-      -V ./cluster3.sh "\"$1\"" "\"$i\""
+      -V cluster3.sh "\"$1\"" "\"$i\""
 #      -pe batch 12 \
 #      -l r620=true \
 done
