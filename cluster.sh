@@ -80,11 +80,10 @@ then
       k=$((k+1))
   #    echo $j
       qsub -N "$job_name-$j" \
-          -pe batch 8 \
+          -pe batch 12 \
+          -l new=true \
           -b y -j y -cwd -o "$dir_name/$job_name-$j.log" \
           -V cluster2.sh "\"${FS[j]}\"" "\"${NFFT[j]}\"" "\"${NW[j]}\"" "\"${K[j]}\"" "\"${PVAL[j]}\"" "\"$i\"" "\"$j\"" "\"$4\"" "\"$5\""
-#          -pe batch 12 \
-#          -l r620=true \
     done
   done
 
@@ -109,11 +108,8 @@ for i in $ii
 do
   job_name=$(basename $i)
   qsub -N "$job_name" \
-      -pe batch 8 \
       -b y -j y -cwd -o "$dir_name/$job_name.log" \
       -V cluster3.sh "\"$1\"" "\"$i\""
-#      -pe batch 12 \
-#      -l r620=true \
 done
 echo check the .log file to see when ax2 finishes
 echo goodbye
