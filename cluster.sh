@@ -5,7 +5,7 @@
 #
 # data can either be a folder of sessions or a single session's base filename
 # use 1 for multitaper_flag to run the fourier analysis in ax1 and the heuristics in ax2
-# use 0 for multitaper_flat to run just ax2 on pre-exiting .ax files
+# use 0 for multitaper_flag to run just ax2 on pre-exiting .ax files
 #
 # for example
 #   ./cluster.sh  ./ultrasonic_parameters.m  /groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/ 0
@@ -90,7 +90,7 @@ then
 
   echo waiting for ax1 to finish
   sleep 1m
-  while [ $(grep "Run time was " $2*.log | wc -l) -ne $k ]
+  while [ $(grep "Run time was " $2/*.log | wc -l) -ne $k ]
   do
     sleep 1m
   done
