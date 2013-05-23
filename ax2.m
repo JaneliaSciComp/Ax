@@ -122,9 +122,15 @@ if(~isempty(tmp))
     [~,datafiles{i},~]=fileparts(tmp(i).name(1:end-5));
   end
   datafiles=unique(datafiles);
+  close_it=0;
   if(~isdeployed && length(datafiles)>1)
     if(exist('matlabpool')==2 && matlabpool('size')==0)
-      matlabpool open
+      try
+        matlabpool open
+        close_it=1;
+      catch
+        disp('WARNING: could not open matlab pool.  proceeding with a single thread.');
+      end
     end
   end
   parfor i=1:length(datafiles)
@@ -132,6 +138,13 @@ if(~isempty(tmp))
     ax2_guts(i, f_low, f_high, conv_size, obj_size, ...
         merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
         merge_time, nseg, min_length, channels, fullfile(data_path, datafiles{i}));
+  end
+  if((exist('matlabpool')==2) && (matlabpool('size')>0) && close_it)
+    try
+      matlabpool close
+    catch
+      disp('WARNING: could not close matlab pool.  exiting anyway.');
+    end
   end
 else
   tmp=dir([data_path '*.ax']);

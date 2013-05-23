@@ -69,7 +69,10 @@ end
 VERSION=1;
 
 SUBSAMPLE=1;
-NWORKERS=matlabpool('size');
+NWORKERS=0;
+if(exist('matlabpool')==2)
+  NWORKERS=matlabpool('size');
+end
 if(NWORKERS==0)  NWORKERS=1;  end
 
 FS=FS/SUBSAMPLE;
