@@ -3,16 +3,27 @@
 % function ax1(FS,NFFT,NW,K,PVAL,FILEIN,FILEOUT)
 % function ax1(FS,NFFT,NW,K,PVAL,FILEIN,FILEOUT,START,STOP)
 %
+% analyze a set of time series with multi-taper spectral analysis and
+% create a sparse matrix of just the time-frequency pixels whose F-test
+% passes PVAL.
+%
+% typical usage consists of one or more input files being analyzed by one
+% or more parameter sets.  for example, four microphone recordings of the
+% same vocalizing mouse analyzed with three different NFFTs and the same
+% NW, K, and PVAL.  <filename>.ch[1-4] yield <filename>-[1-3].ax
+%
 % FS: sampling rate in Hertz
 % NFFT: FFT window size in seconds, rounds up to the next power of 2 tics
 % NW: multi-taper time-bandwidth product
 % K: number of tapers
-% PVAL:  F-test p-val threshold
-% START,STOP:  optional time range, in seconds
+% PVAL: F-test p-val threshold
+% FILEIN: the base filename and path of .ch[0-9] files containing arrays of float32
+% FILEOUT: an integer to append to FILEIN to differentiate parameter sets used
+% START,STOP: optional time range, in seconds
 %
 % output is a binary file with a time x frequency x amplitude x channel array of hot pixels
 %
-% ax1('ultrasonic_params','urine','1');  % need to have just one NFFT specified
+% ax1('ultrasonic_params','urine','1');
 % ax1(200e3,0.001,15,29,0.01,'urine','1');
 % ax1(450450,0.001,15,29,0.01,0,30,'groundtruth','1');
 

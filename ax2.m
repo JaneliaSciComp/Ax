@@ -1,42 +1,52 @@
-%function ax2(f_low, f_high, conv_size, obj_size, ...
-%    merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
-%    merge_time, nseg, min_length, ...
-%    channels, data_path)
-%function ax2(params_file, data_path)
+% function ax2(f_low, f_high, conv_size, obj_size, ...
+%     merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
+%     merge_time, nseg, min_length, ...
+%     channels, data_path)
+% function ax2(params_file, data_path)
 %
-%input arguments:
-%  f_low, f_high are in Hz
-%  conv_size is [height_freq width_time] in pixels, each must be odd
-%  obj_size is in pixels
-%  set merge_freq to 1 to collapse harmonically related syllables, 0 otherwise
-%    merge_freq_overlap is the fraction in time two segments must overlap
-%    merge_freq_ratio is the tolerance in frequency ratio two segments must be within
-%    merge_freq_fraction is the fraction of the overlap that must be within the ratio tolerance
-%  merge_time is the maximum gap length, in seconds, below which vocalizations
-%    are combined;  use 0 to not combine
-%  nseg is the minimum number of merged segments a vocalization must contain
-%  min_length is the minimum syllable length in sec
-%  channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
-%  data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
+% extract contours from a set of spectrograms by first convolving hot pixels
+% with a square box, then finding contiguous pixels, and finally discarding those
+% with small areas.  optionally merge contours that are harmonically related or
+% overlapped in time.
 %
-%four files are output:
-%  voc: an Mx4 array whose columns are the start & stop times (sec), and low & high frequences (Hz)
-%  fc: a cell array (vocs) of cell arrays (syls) of Nx3 arrays (time[s], freq[Hz], amplitude)
-%      of the hot pixel in each time slice with the max amplitude
-%  fc2: a cell array (vocs) of cell arrays (syls) of Nx4 arrays (time[s], freq[Hz], amplitude, channel)
-%      of all hot pixels
-%  fh: a cell array (vocalizations) of cell arrays (syllables) of spectral purity quotients
-%  params: a .m file of the parameters used
-
-%for ultrasonic:
-%ax2(20e3, 120e3, [15 7], 1500, 0, 0.9, 0.1, 0.9, 0, 1, 0,...
-%    1:4, '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-%ax2('ultrasonic_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+% typical usage consists of three spectrograms made with three different FFT
+% window sizes.  a single common image is constructed using the smallest temporal
+% and frequency resolutions and populating with horizontally or vertically
+% elongated pixels.
 %
-%for rejection:
-%ax2(1e3, 20e3, [15 7], 1000, 0, 0.9, 0.1, 0.9, 0, 3, 0,...
-%    1:4, '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-%ax2('rejection_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+% input arguments:
+%   f_low, f_high are in Hz
+%   conv_size is [height_freq width_time] in pixels, each must be odd
+%   obj_size is in pixels
+%   set merge_freq to 1 to collapse harmonically related syllables, 0 otherwise
+%     merge_freq_overlap is the fraction in time two segments must overlap
+%     merge_freq_ratio is the tolerance in frequency ratio two segments must be within
+%     merge_freq_fraction is the fraction of the overlap that must be within the ratio tolerance
+%   merge_time is the maximum gap length, in seconds, below which vocalizations
+%     are combined;  use 0 to not combine
+%   nseg is the minimum number of merged segments a vocalization must contain
+%   min_length is the minimum syllable length in sec
+%   channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
+%   data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
+%
+% four files are output:
+%   voc: an Mx4 array whose columns are the start & stop times (sec), and low & high frequences (Hz)
+%   fc: a cell array (vocs) of cell arrays (syls) of Nx3 arrays (time[s], freq[Hz], amplitude)
+%       of the hot pixel in each time slice with the max amplitude
+%   fc2: a cell array (vocs) of cell arrays (syls) of Nx4 arrays (time[s], freq[Hz], amplitude, channel)
+%       of all hot pixels
+%   fh: a cell array (vocalizations) of cell arrays (syllables) of spectral purity quotients
+%   params: a .m file of the parameters used
+%
+% for ultrasonic:
+% ax2(20e3, 120e3, [15 7], 1500, 0, 0.9, 0.1, 0.9, 0, 1, 0,...
+%     1:4, '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+% ax2('ultrasonic_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+%
+% for rejection:
+% ax2(1e3, 20e3, [15 7], 1000, 0, 0.9, 0.1, 0.9, 0, 3, 0,...
+%     1:4, '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+% ax2('rejection_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 
 function ax2(varargin)
 
