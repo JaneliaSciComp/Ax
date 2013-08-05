@@ -14,7 +14,7 @@
 %    merge_freq_fraction is the fraction of the overlap that must be within the ratio tolerance
 %  merge_time is the maximum gap length, in seconds, below which vocalizations
 %    are combined;  use 0 to not combine
-%  nseg is the minimum number of merged segements a vocalization must contain
+%  nseg is the minimum number of merged segments a vocalization must contain
 %  min_length is the minimum syllable length in sec
 %  channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
 %  data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
@@ -242,382 +242,367 @@ chunk_curr=1;
 while ~eof
   if(toc>10)  disp([num2str(num) ': ' num2str(chunk_curr*CHUNK_TIME_SEC) ' sec chunk']);  tic;  end;
 
-  %collapse across channels and window sizes
-%  if ~eof
-    for i=1:length(data)
-      tmp=[];  data(i).MT_next=[];
-      while ~feof(fid(i))
-        [foo,count(i)]=fread(fid(i),[4 CHUNK_FILE],'double');
-        if(isempty(foo))  continue;  end
-        tmp=[tmp; foo'];
-        idx=find(tmp(:,1)>chunk_curr*CHUNK_TIME_WINDOWS(i),1);
-        if(feof(fid(i)) && isempty(idx))
-          idx=size(tmp,1)+1;
-        end
-        if(~isempty(idx))
-          idx2=find((tmp(1:(idx-1),2)>=F_LOW) & (tmp(1:(idx-1),2)<=F_HIGH) & ismember(tmp(1:(idx-1),4),CHANNELS));
-          data(i).MT_next=tmp(idx2,:);
-          data(i).MT_next(:,1)=data(i).MT_next(:,1)-(chunk_curr-1)*CHUNK_TIME_WINDOWS(i);
-          fseek(fid(i),-(size(tmp,1)-idx+1)*4*8,'cof');
-          break;
-        end
-      end
-    end
-
-    sizeF=ceil(F_HIGH/df)-floor(F_LOW/df)+2*floor(maxNFFT/minNFFT/2)+1;
-    sizeT=CHUNK_TIME_WINDOWS(1)+2*floor(maxNFFT/minNFFT/2)+1;
-    im_next=false(sizeF,sizeT);
-
-    for k=1:length(data)
-      if(isempty(data(k).MT_next))  continue;  end
-      tmpT=data(k).NFFT/minNFFT;
-      tmpF=maxNFFT/data(k).NFFT;
-      for i=(-floor(tmpF/2):floor(tmpF/2))+floor(maxNFFT/minNFFT/2)+1
-        for n=(-floor(tmpT/2):floor(tmpT/2))+floor(maxNFFT/minNFFT/2)+1
-          im_next(sub2ind([sizeF,sizeT],...
-              round(data(k).MT_next(:,2)/df)+i-floor(F_LOW/df), ...
-              tmpT*data(k).MT_next(:,1)+n))=true;
-        end
-      end
-    end
-
-    %convolve
-    im_next=[zeros(sizeF,(CONV_SIZE(2)-1)/2) im_next zeros(sizeF,(CONV_SIZE(2)-1)/2)];
-    im_next=logical(conv2(single(im_next),ones(CONV_SIZE),'same'));
-
-    %segment
-    syls_next=bwconncomp(im_next,8);
-%  else
-%    for i=1:length(data)
-%      data(i).MT_next=[];
-%    end
-%    im_next=[];
-%    syls_next=[];
-%  end
-
-  if(exist('syls')==0)
-    for i=1:length(data)
-      data(i).MT=data(i).MT_next;
-    end
-    im=im_next;
-    syls=syls_next;
-    chunk_curr=chunk_curr+1;
-    continue;
-  end
-
   eof=(max(count)<4*CHUNK_FILE);
 
-  %unsplit across chunk boundaries
-  flag=1;
-  while(flag)
-    flag=0;
-    for i=1:syls.NumObjects
-      [ri ci]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
-      if(sum(ci>=(syls.ImageSize(2)-(CONV_SIZE(2)-1)/2))==0) continue;  end
-      j=1;
-      while j<=syls_next.NumObjects
-        [rj cj]=ind2sub(syls_next.ImageSize,syls_next.PixelIdxList{j});
-        if(sum(cj<=((CONV_SIZE(2)-1)/2))==0)  j=j+1;  continue;  end
-        %if((max(ri) < (min(rj)-1)) || (max(rj) < (min(ri)-1)))  j=j+1;  continue;  end
-        %cj=cj+chunk_splits(k+1)-chunk_splits(k);
-        cj=cj+CHUNK_TIME_WINDOWS(1);
-        min(min((repmat(ri,1,length(rj))-repmat(rj',length(ri),1)).^2 + ...
-                (repmat(ci,1,length(cj))-repmat(cj',length(ci),1)).^2));
-        if ans<=2
-          %disp(['unsplitting syllable between chunks #' num2str(k) '-' num2str(k+1)]);
-          flag=1;
-          syls.PixelIdxList{i}=[syls.PixelIdxList{i}; ...
-              syls_next.PixelIdxList{j}+CHUNK_TIME_WINDOWS(1)*syls.ImageSize(1)];
-          syls_next.PixelIdxList(j)=[];
-          syls_next.NumObjects=syls_next.NumObjects-1;
-        else
-          j=j+1;
-        end
+  % read in chunk of data
+  for i=1:length(data)
+    tmp=[];  data(i).MT_next=[];
+    while ~feof(fid(i))
+      [foo,count(i)]=fread(fid(i),[4 CHUNK_FILE],'double');
+      if(isempty(foo))  continue;  end
+      tmp=[tmp; foo'];
+      idx=find(tmp(:,1)>chunk_curr*CHUNK_TIME_WINDOWS(i),1);
+      if(feof(fid(i)) && isempty(idx))
+        idx=size(tmp,1)+1;
       end
-    end
-  end
-
-  %throwout out small blobs
-  syls2=regionprops(syls,'basic');
-  tmp=find([syls2.Area]>OBJ_SIZE);
-  syls2=syls2(tmp);
-  syls.PixelIdxList=syls.PixelIdxList(tmp);
-  syls.NumObjects=length(tmp);
-
-  %calculate frequency contours (and histograms)
-  freq_contour={};
-  freq_contour2={};
-  freq_histogram={};
-  for i=1:length(syls2)
-    tmp=[];
-    for j=1:length(data)
-      tmpT=data(j).NFFT/minNFFT;
-%      idx=find(((tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2-floor(tmpT/2))>=syls2(i).BoundingBox(1)) & ...
-%               ((tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2+floor(tmpT/2))<=sum(syls2(i).BoundingBox([1 3]))) & ...
-%                (data(j).MT(:,2)>=(syls2(i).BoundingBox(2)*df+F_LOW)) & ...
-%                (data(j).MT(:,2)<=(sum(syls2(i).BoundingBox([2 4]))*df+F_LOW)));
-      foo=[tmpT*data(j).MT(:,1)+floor(maxNFFT/minNFFT/2)+1+(CONV_SIZE(2)-1)/2 ...
-           round(data(j).MT(:,2)/df)-floor(F_LOW/df)+floor(maxNFFT/minNFFT/2)+1];
-      [r c]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
-      idx=ismember(foo,[c r],'rows');
-      foo=data(j).MT(idx,1:4);
-      foo(:,1)=foo(:,1)+(chunk_curr-2)*CHUNK_TIME_WINDOWS(j);  % +1?
-      foo(:,1)=foo(:,1).*data(j).NFFT/2/FS;
-      tmp=[tmp; foo];
-    end
-    tmp=sortrows(tmp);
-    freq_contour{i}{1}=zeros(length(unique(tmp(:,1))),3);
-    freq_contour2{i}{1}=tmp;
-    pooh=[];
-    j=1;  l=1;
-    while(j<=size(tmp,1))
-      k=j+1;  while((k<=size(tmp,1)) && (tmp(j,1)==tmp(k,1)))  k=k+1;  end
-      [~, idx]=max(tmp(j:(k-1),3));
-      freq_contour{i}{1}(l,:)=tmp(j+idx-1,1:3);
-      pooh=[pooh; tmp(j:(k-1),2)-tmp(j+idx-1,2)];
-      j=k;  l=l+1;
-    end
-    freq_histogram{i}{1}=sum(pooh==0)/length(pooh);
-  end
-
-  %merge harmonically related syllables...
-  if(MERGE_FREQ~=0)
-    %disp('merge harmonically related syllables...');
-    syls3=ones(1,length(syls2));
-    for i=1:(length(syls2)-1)
-      if(isempty(syls.PixelIdxList{i}))  continue;  end
-      flag=1;
-      while(flag)
-        flag=0;
-        for j=(i+1):length(syls2)
-          if(isempty(syls.PixelIdxList{j}))  continue;  end
-          doit=false;  position=nan(1,length(freq_contour{i}));
-          for k=1:length(freq_contour{i})
-            [c,ii,jj]=intersect(freq_contour{i}{k}(:,1),freq_contour{j}{1}(:,1));
-            if((length(c)/size(freq_contour{i}{k},1)<MERGE_FREQ_OVERLAP) && ...
-               (length(c)/size(freq_contour{j}{1},1)<MERGE_FREQ_OVERLAP))
-              continue;
-            end
-            %doit=doit | ...
-            %    sum(sum(abs((freq_contour{i}{k}(ii,2)./freq_contour{j}{1}(jj,2))*...
-            %        [1/3 1/2 2/3 3/2 2 3]-1)<MERGE_FREQ_RATIO)...
-            %    >(MERGE_FREQ_FRACTION*length(c)));
-            sum(abs((freq_contour{i}{k}(ii,2)./freq_contour{j}{1}(jj,2))*...
-                [1/3 1/2 2/3 3/2 2 3]-1)<MERGE_FREQ_RATIO)>(MERGE_FREQ_FRACTION*length(c));
-            doit=doit | sum(ans);
-            find(ans,1,'first');
-            if(~isempty(ans))
-              position(k)=ans<4;
-            end
-          end
-          if(doit)
-            flag=1;
-            syls.PixelIdxList{i}=[syls.PixelIdxList{i}; syls.PixelIdxList{j}];
-            syls.PixelIdxList{j}=[];
-            syls2(i).BoundingBox(1)=...
-                min([syls2(i).BoundingBox(1) syls2(j).BoundingBox(1)]);
-            syls2(i).BoundingBox(2)=...
-                min([syls2(i).BoundingBox(2) syls2(j).BoundingBox(2)]);
-            syls2(i).BoundingBox(3)=...
-                max([sum(syls2(i).BoundingBox([1 3])) sum(syls2(j).BoundingBox([1 3]))])-...
-                syls2(i).BoundingBox(1);
-            syls2(i).BoundingBox(4)=...
-                max([sum(syls2(i).BoundingBox([2 4])) sum(syls2(j).BoundingBox([2 4]))])-...
-                syls2(i).BoundingBox(2);
-            syls3(i)=syls3(i)+syls3(j);
-            syls3(j)=0;
-            tmp=find(position,1,'first');  if(isempty(tmp))  tmp=length(freq_contour{i})+1;  end
-            freq_contour{i}={freq_contour{i}{1:(tmp-1)} freq_contour{j}{:} freq_contour{i}{tmp:end}};
-            freq_contour{j}=[];
-            freq_contour2{i}={freq_contour2{i}{1:(tmp-1)} freq_contour2{j}{:} freq_contour2{i}{tmp:end}};
-            freq_contour2{j}=[];
-            freq_histogram{i}=[freq_histogram{i}(1:(tmp-1)) freq_histogram{j}{:} freq_histogram{i}(tmp:end)];
-            freq_histogram{j}=[];
-          end
-        end
-      end
-    end
-    idx=find(syls3>=1);
-    syls.NumObjects=length(idx);
-    syls.PixelIdxList={syls.PixelIdxList{idx}};
-    syls2=regionprops(syls,'basic');
-    freq_contour={freq_contour{idx}};
-    freq_contour2={freq_contour2{idx}};
-    freq_histogram={freq_histogram{idx}};
-  end
-
-  %merge temporally nearby syllables...
-  if(MERGE_TIME_WINDOWS~=0)
-    %disp('merge temporally nearby syllables...');
-    syls3=ones(1,length(syls2));
-    for i=1:(length(syls2)-1)
-      if(isempty(syls.PixelIdxList{i}))  continue;  end
-      flag=1;
-      while(flag)
-        flag=0;
-        for j=(i+1):length(syls2)
-          if(isempty(syls.PixelIdxList{j}))  continue;  end
-          if(((sum(syls2(i).BoundingBox([1 3]))+MERGE_TIME_WINDOWS) > syls2(j).BoundingBox(1)) &&...
-             ((sum(syls2(j).BoundingBox([1 3]))+MERGE_TIME_WINDOWS) > syls2(i).BoundingBox(1)))
-            flag=1;
-            syls.PixelIdxList{i}=[syls.PixelIdxList{i}; syls.PixelIdxList{j}];
-            syls.PixelIdxList{j}=[];
-            syls2(i).BoundingBox(1)=...
-                min([syls2(i).BoundingBox(1) syls2(j).BoundingBox(1)]);
-            syls2(i).BoundingBox(2)=...
-                min([syls2(i).BoundingBox(2) syls2(j).BoundingBox(2)]);
-            syls2(i).BoundingBox(3)=...
-                max([sum(syls2(i).BoundingBox([1 3])) sum(syls2(j).BoundingBox([1 3]))])-...
-                syls2(i).BoundingBox(1);
-            syls2(i).BoundingBox(4)=...
-                max([sum(syls2(i).BoundingBox([2 4])) sum(syls2(j).BoundingBox([2 4]))])-...
-                syls2(i).BoundingBox(2);
-            syls3(i)=syls3(i)+syls3(j);
-            syls3(j)=0;
-            freq_contour{i}={freq_contour{i}{:} freq_contour{j}{:}};
-            freq_contour{j}=[];
-            freq_contour2{i}={freq_contour2{i}{:} freq_contour2{j}{:}};
-            freq_contour2{j}=[];
-            freq_histogram{i}=[freq_histogram{i} freq_histogram{j}];
-            freq_histogram{j}=[];
-          end
-        end
-      end
-    end
-    idx=find(syls3>=NSEG);
-    syls.NumObjects=length(idx);
-    syls.PixelIdxList={syls.PixelIdxList{idx}};
-    syls2=regionprops(syls,'basic');
-    freq_contour={freq_contour{idx}};
-    freq_contour2={freq_contour2{idx}};
-    freq_histogram={freq_histogram{idx}};
-  end
-
-  %cull short syllables...
-  if(MIN_LENGTH>0)
-    %disp('cull short syllables...');
-    reshape([syls2.BoundingBox],4,length(syls2))';
-    idx=find(((ans(:,3)-CONV_SIZE(2)+1)*minNFFT/2/FS)>MIN_LENGTH);
-    syls.NumObjects=length(idx);
-    syls.PixelIdxList={syls.PixelIdxList{idx}};
-    syls2=regionprops(syls,'basic');
-    freq_contour={freq_contour{idx}};
-    freq_contour2={freq_contour2{idx}};
-    freq_histogram={freq_histogram{idx}};
-  end
-  tmp=reshape([syls2.BoundingBox],4,length(syls2))';
-  %tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
-  tmp(:,1)=tmp(:,1)-floor(maxNFFT/minNFFT/2)-1;
-  tmp(:,2)=tmp(:,2)-floor(maxNFFT/minNFFT/2)-1;
-  tmp(:,3)=tmp(:,3)-CONV_SIZE(2)+1;
-  skytruth=[skytruth; ...
-      ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1))*minNFFT/2/FS ...
-      zeros(size(tmp,1),1) ...
-      [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
-  freq_contours={freq_contours{:} freq_contour{:}};
-  freq_contours2={freq_contours2{:} freq_contour2{:}};
-  freq_histograms={freq_histograms{:} freq_histogram{:}};
-
-  %compare to ground truth
-  if(GROUNDTRUTH)
-    while((sidx<=size(skytruth,1))&&(skytruth(sidx,2)<groundtruth(gidx,1)))
-      sidx=sidx+1;
-    end
-    while((sidx<=size(skytruth,1)) && (gidx<=size(groundtruth,1)))
-      if(skytruth(sidx,1)<groundtruth(gidx,2))
-        groundtruth(gidx,3)=sidx;
-        skytruth(sidx,3)=gidx;
-        sidx=sidx+1;
-      end
-      if(sidx>size(skytruth,1))  break;  end
-      if(skytruth(sidx,1)>groundtruth(gidx,2))
-        gidx=gidx+1;
-        if(gidx>size(groundtruth,1))  break;  end
-      end
-      while((sidx<size(skytruth,1))&&(skytruth(sidx,2)<groundtruth(gidx,1)))
-        sidx=sidx+1;
-      end
-    end
-    if ~eof
-      misses=find(groundtruth(1:min([gidx-1 size(groundtruth,1)]),3)==0);
-      false_alarms=find(skytruth(:,3)==0);
-      hits=setdiff(1:min([gidx-1 size(groundtruth,1)]),misses);
-    else
-      misses=find(groundtruth(1:size(groundtruth,1),3)==0);
-      false_alarms=find(skytruth(:,3)==0);
-      hits=setdiff(1:size(groundtruth,1),misses);
-    end
-  end
-
-  %plot
-  if(SAVE_WAV || SAVE_PNG)
-    clf;  hold on;
-
-    [r,c]=ind2sub(syls.ImageSize,cat(1,syls.PixelIdxList{:}));
-    c=c-(CONV_SIZE(2)-1)/2+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1);
-    c=c-floor(maxNFFT/minNFFT/2)-1;
-    r=r-floor(maxNFFT/minNFFT/2)-1;
-    plot(c.*(minNFFT/2)./FS,r.*df+F_LOW,'bo');
-
-    for i=1:length(syls2)
-      for j=1:length(freq_contours{end-i+1})
-        plot(freq_contours{end-i+1}{j}(:,1),freq_contours{end-i+1}{j}(:,2),'r-');
-        plot(freq_contours2{end-i+1}{j}(:,1),freq_contours2{end-i+1}{j}(:,2),'g.');
-      end
-    end
-
-    if(GROUNDTRUTH)
-      left =(chunk_curr-2)*CHUNK_TIME_WINDOWS(end)*maxNFFT/2/FS;
-      right=(chunk_curr-1)*CHUNK_TIME_WINDOWS(end)*maxNFFT/2/FS;
-      idx=find(((groundtruth(:,1)>=left) & (groundtruth(:,1)<=right)) | ...
-               ((groundtruth(:,2)>=left) & (groundtruth(:,2)<=right)));
       if(~isempty(idx))
-        line(groundtruth(idx,[1 2 2 1 1]),...
-            [F_LOW F_LOW F_HIGH F_HIGH F_LOW],'color',[0 1 0]);
+        idx2=find((tmp(1:(idx-1),2)>=F_LOW) & (tmp(1:(idx-1),2)<=F_HIGH) & ismember(tmp(1:(idx-1),4),CHANNELS));
+        data(i).MT_next=tmp(idx2,:);
+        data(i).MT_next(:,1)=data(i).MT_next(:,1)-(chunk_curr-1)*CHUNK_TIME_WINDOWS(i);
+        fseek(fid(i),-(size(tmp,1)-idx+1)*4*8,'cof');
+        break;
+      end
+    end
+  end
+
+  sizeF=ceil(F_HIGH/df)-floor(F_LOW/df)+2*floor(maxNFFT/minNFFT/2)+1;
+  sizeT=CHUNK_TIME_WINDOWS(1)+2*floor(maxNFFT/minNFFT/2)+1;
+  im_next=false(sizeF,sizeT);
+
+
+  %collapse across channels and window sizes
+  for k=1:length(data)
+    if(isempty(data(k).MT_next))  continue;  end
+    tmpT=data(k).NFFT/minNFFT;
+    tmpF=maxNFFT/data(k).NFFT;
+    for i=(-floor(tmpF/2):floor(tmpF/2))+floor(maxNFFT/minNFFT/2)+1
+      for n=(-floor(tmpT/2):floor(tmpT/2))+floor(maxNFFT/minNFFT/2)+1
+        im_next(sub2ind([sizeF,sizeT],...
+            round(data(k).MT_next(:,2)/df)+i-floor(F_LOW/df), ...
+            tmpT*data(k).MT_next(:,1)+n))=true;
+      end
+    end
+  end
+
+  %convolve
+  im_next=[zeros(sizeF,(CONV_SIZE(2)-1)/2) im_next zeros(sizeF,(CONV_SIZE(2)-1)/2)];
+  im_next=logical(conv2(single(im_next),ones(CONV_SIZE),'same'));
+
+  %segment
+  syls_next=bwconncomp(im_next,8);
+
+  % skip to 2nd chunk if currently on first
+  if(exist('syls'))
+
+    %unsplit across chunk boundaries
+    flag=1;
+    while(flag)
+      flag=0;
+      for i=1:syls.NumObjects
+        [ri ci]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
+        if(sum(ci>=(syls.ImageSize(2)-(CONV_SIZE(2)-1)/2))==0) continue;  end
+        j=1;
+        while j<=syls_next.NumObjects
+          [rj cj]=ind2sub(syls_next.ImageSize,syls_next.PixelIdxList{j});
+          if(sum(cj<=((CONV_SIZE(2)-1)/2))==0)  j=j+1;  continue;  end
+          %if((max(ri) < (min(rj)-1)) || (max(rj) < (min(ri)-1)))  j=j+1;  continue;  end
+          %cj=cj+chunk_splits(k+1)-chunk_splits(k);
+          cj=cj+CHUNK_TIME_WINDOWS(1);
+          min(min((repmat(ri,1,length(rj))-repmat(rj',length(ri),1)).^2 + ...
+                  (repmat(ci,1,length(cj))-repmat(cj',length(ci),1)).^2));
+          if ans<=2
+            %disp(['unsplitting syllable between chunks #' num2str(k) '-' num2str(k+1)]);
+            flag=1;
+            syls.PixelIdxList{i}=[syls.PixelIdxList{i}; ...
+                syls_next.PixelIdxList{j}+CHUNK_TIME_WINDOWS(1)*syls.ImageSize(1)];
+            syls_next.PixelIdxList(j)=[];
+            syls_next.NumObjects=syls_next.NumObjects-1;
+          else
+            j=j+1;
+          end
+        end
       end
     end
 
-    plot(skytruth((end-length(syls2)+1):end,[1 2 2 1 1])',...
-         skytruth((end-length(syls2)+1):end,[4 4 5 5 4])','y');
+    %throwout out small blobs
+    syls2=regionprops(syls,'basic');
+    tmp=find([syls2.Area]>OBJ_SIZE);
+    syls2=syls2(tmp);
+    syls.PixelIdxList=syls.PixelIdxList(tmp);
+    syls.NumObjects=length(tmp);
 
-    %plot(repmat(chunk_splits*minNFFT/2/FS,2,1),...
-    %     repmat([F_LOW; F_HIGH],1,length(chunk_splits)),'c');
-
-    axis tight;
-    v=axis;  axis([v(1) v(2) F_LOW F_HIGH]);
-    xlabel('time (s)');
-    ylabel('frequency (Hz)');
-
-    [b,a]=butter(4,F_LOW/(FS/2),'high');
-
-    % plot hits, misses and false alarms separately
-    if(~GROUNDTRUTH)
-      while voc_num<=min([200 size(skytruth,1)])
-        left=skytruth(voc_num,1);
-        right=skytruth(voc_num,2);
-        ax2_print(voc_num,left,right,'voc',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
-        voc_num=voc_num+1;
+    %calculate frequency contours (and histograms)
+    freq_contour={};
+    freq_contour2={};
+    freq_histogram={};
+    for i=1:length(syls2)
+      tmp=[];
+      for j=1:length(data)
+        tmpT=data(j).NFFT/minNFFT;
+  %      idx=find(((tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2-floor(tmpT/2))>=syls2(i).BoundingBox(1)) & ...
+  %               ((tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2+floor(tmpT/2))<=sum(syls2(i).BoundingBox([1 3]))) & ...
+  %                (data(j).MT(:,2)>=(syls2(i).BoundingBox(2)*df+F_LOW)) & ...
+  %                (data(j).MT(:,2)<=(sum(syls2(i).BoundingBox([2 4]))*df+F_LOW)));
+        foo=[tmpT*data(j).MT(:,1)+floor(maxNFFT/minNFFT/2)+1+(CONV_SIZE(2)-1)/2 ...
+             round(data(j).MT(:,2)/df)-floor(F_LOW/df)+floor(maxNFFT/minNFFT/2)+1];
+        [r c]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
+        idx=ismember(foo,[c r],'rows');
+        foo=data(j).MT(idx,1:4);
+        foo(:,1)=foo(:,1)+(chunk_curr-2)*CHUNK_TIME_WINDOWS(j);  % +1?
+        foo(:,1)=foo(:,1).*data(j).NFFT/2/FS;
+        tmp=[tmp; foo];
       end
-    else
-      while hit_num<=min([20 length(hits)])
-        left =min([groundtruth(hits(hit_num),1) skytruth(groundtruth(hits(hit_num),3),1)]);
-        right=max([groundtruth(hits(hit_num),2) skytruth(groundtruth(hits(hit_num),3),2)]);
-        ax2_print(hit_num,left,right,'hit',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
-        hit_num=hit_num+1;
+      tmp=sortrows(tmp);
+      freq_contour{i}{1}=zeros(length(unique(tmp(:,1))),3);
+      freq_contour2{i}{1}=tmp;
+      pooh=[];
+      j=1;  l=1;
+      while(j<=size(tmp,1))
+        k=j+1;  while((k<=size(tmp,1)) && (tmp(j,1)==tmp(k,1)))  k=k+1;  end
+        [~, idx]=max(tmp(j:(k-1),3));
+        freq_contour{i}{1}(l,:)=tmp(j+idx-1,1:3);
+        pooh=[pooh; tmp(j:(k-1),2)-tmp(j+idx-1,2)];
+        j=k;  l=l+1;
+      end
+      freq_histogram{i}{1}=sum(pooh==0)/length(pooh);
+    end
+
+    %merge harmonically related syllables
+    if(MERGE_FREQ~=0)
+      syls3=ones(1,length(syls2));
+      for i=1:(length(syls2)-1)
+        if(isempty(syls.PixelIdxList{i}))  continue;  end
+        flag=1;
+        while(flag)
+          flag=0;
+          for j=(i+1):length(syls2)
+            if(isempty(syls.PixelIdxList{j}))  continue;  end
+            doit=false;  position=nan(1,length(freq_contour{i}));
+            for k=1:length(freq_contour{i})
+              [c,ii,jj]=intersect(freq_contour{i}{k}(:,1),freq_contour{j}{1}(:,1));
+              if((length(c)/size(freq_contour{i}{k},1)<MERGE_FREQ_OVERLAP) && ...
+                 (length(c)/size(freq_contour{j}{1},1)<MERGE_FREQ_OVERLAP))
+                continue;
+              end
+              %doit=doit | ...
+              %    sum(sum(abs((freq_contour{i}{k}(ii,2)./freq_contour{j}{1}(jj,2))*...
+              %        [1/3 1/2 2/3 3/2 2 3]-1)<MERGE_FREQ_RATIO)...
+              %    >(MERGE_FREQ_FRACTION*length(c)));
+              sum(abs((freq_contour{i}{k}(ii,2)./freq_contour{j}{1}(jj,2))*...
+                  [1/3 1/2 2/3 3/2 2 3]-1)<MERGE_FREQ_RATIO)>(MERGE_FREQ_FRACTION*length(c));
+              doit=doit | sum(ans);
+              find(ans,1,'first');
+              if(~isempty(ans))
+                position(k)=ans<4;
+              end
+            end
+            if(doit)
+              flag=1;
+              syls.PixelIdxList{i}=[syls.PixelIdxList{i}; syls.PixelIdxList{j}];
+              syls.PixelIdxList{j}=[];
+              syls2(i).BoundingBox(1)=...
+                  min([syls2(i).BoundingBox(1) syls2(j).BoundingBox(1)]);
+              syls2(i).BoundingBox(2)=...
+                  min([syls2(i).BoundingBox(2) syls2(j).BoundingBox(2)]);
+              syls2(i).BoundingBox(3)=...
+                  max([sum(syls2(i).BoundingBox([1 3])) sum(syls2(j).BoundingBox([1 3]))])-...
+                  syls2(i).BoundingBox(1);
+              syls2(i).BoundingBox(4)=...
+                  max([sum(syls2(i).BoundingBox([2 4])) sum(syls2(j).BoundingBox([2 4]))])-...
+                  syls2(i).BoundingBox(2);
+              syls3(i)=syls3(i)+syls3(j);
+              syls3(j)=0;
+              tmp=find(position,1,'first');  if(isempty(tmp))  tmp=length(freq_contour{i})+1;  end
+              freq_contour{i}={freq_contour{i}{1:(tmp-1)} freq_contour{j}{:} freq_contour{i}{tmp:end}};
+              freq_contour{j}=[];
+              freq_contour2{i}={freq_contour2{i}{1:(tmp-1)} freq_contour2{j}{:} freq_contour2{i}{tmp:end}};
+              freq_contour2{j}=[];
+              freq_histogram{i}=[freq_histogram{i}(1:(tmp-1)) freq_histogram{j}{:} freq_histogram{i}(tmp:end)];
+              freq_histogram{j}=[];
+            end
+          end
+        end
+      end
+      idx=find(syls3>=1);
+      syls.NumObjects=length(idx);
+      syls.PixelIdxList={syls.PixelIdxList{idx}};
+      syls2=regionprops(syls,'basic');
+      freq_contour={freq_contour{idx}};
+      freq_contour2={freq_contour2{idx}};
+      freq_histogram={freq_histogram{idx}};
+    end
+
+    %merge temporally nearby syllables
+    if(MERGE_TIME_WINDOWS~=0)
+      syls3=ones(1,length(syls2));
+      for i=1:(length(syls2)-1)
+        if(isempty(syls.PixelIdxList{i}))  continue;  end
+        flag=1;
+        while(flag)
+          flag=0;
+          for j=(i+1):length(syls2)
+            if(isempty(syls.PixelIdxList{j}))  continue;  end
+            if(((sum(syls2(i).BoundingBox([1 3]))+MERGE_TIME_WINDOWS) > syls2(j).BoundingBox(1)) &&...
+               ((sum(syls2(j).BoundingBox([1 3]))+MERGE_TIME_WINDOWS) > syls2(i).BoundingBox(1)))
+              flag=1;
+              syls.PixelIdxList{i}=[syls.PixelIdxList{i}; syls.PixelIdxList{j}];
+              syls.PixelIdxList{j}=[];
+              syls2(i).BoundingBox(1)=...
+                  min([syls2(i).BoundingBox(1) syls2(j).BoundingBox(1)]);
+              syls2(i).BoundingBox(2)=...
+                  min([syls2(i).BoundingBox(2) syls2(j).BoundingBox(2)]);
+              syls2(i).BoundingBox(3)=...
+                  max([sum(syls2(i).BoundingBox([1 3])) sum(syls2(j).BoundingBox([1 3]))])-...
+                  syls2(i).BoundingBox(1);
+              syls2(i).BoundingBox(4)=...
+                  max([sum(syls2(i).BoundingBox([2 4])) sum(syls2(j).BoundingBox([2 4]))])-...
+                  syls2(i).BoundingBox(2);
+              syls3(i)=syls3(i)+syls3(j);
+              syls3(j)=0;
+              freq_contour{i}={freq_contour{i}{:} freq_contour{j}{:}};
+              freq_contour{j}=[];
+              freq_contour2{i}={freq_contour2{i}{:} freq_contour2{j}{:}};
+              freq_contour2{j}=[];
+              freq_histogram{i}=[freq_histogram{i} freq_histogram{j}];
+              freq_histogram{j}=[];
+            end
+          end
+        end
+      end
+      idx=find(syls3>=NSEG);
+      syls.NumObjects=length(idx);
+      syls.PixelIdxList={syls.PixelIdxList{idx}};
+      syls2=regionprops(syls,'basic');
+      freq_contour={freq_contour{idx}};
+      freq_contour2={freq_contour2{idx}};
+      freq_histogram={freq_histogram{idx}};
+    end
+
+    %cull short syllables
+    if(MIN_LENGTH>0)
+      reshape([syls2.BoundingBox],4,length(syls2))';
+      idx=find(((ans(:,3)-CONV_SIZE(2)+1)*minNFFT/2/FS)>MIN_LENGTH);
+      syls.NumObjects=length(idx);
+      syls.PixelIdxList={syls.PixelIdxList{idx}};
+      syls2=regionprops(syls,'basic');
+      freq_contour={freq_contour{idx}};
+      freq_contour2={freq_contour2{idx}};
+      freq_histogram={freq_histogram{idx}};
+    end
+    tmp=reshape([syls2.BoundingBox],4,length(syls2))';
+    %tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
+    tmp(:,1)=tmp(:,1)-floor(maxNFFT/minNFFT/2)-1;
+    tmp(:,2)=tmp(:,2)-floor(maxNFFT/minNFFT/2)-1;
+    tmp(:,3)=tmp(:,3)-CONV_SIZE(2)+1;
+    skytruth=[skytruth; ...
+        ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1))*minNFFT/2/FS ...
+        zeros(size(tmp,1),1) ...
+        [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
+    freq_contours={freq_contours{:} freq_contour{:}};
+    freq_contours2={freq_contours2{:} freq_contour2{:}};
+    freq_histograms={freq_histograms{:} freq_histogram{:}};
+
+    %compare to ground truth
+    if(GROUNDTRUTH)
+      while((sidx<=size(skytruth,1))&&(skytruth(sidx,2)<groundtruth(gidx,1)))
+        sidx=sidx+1;
+      end
+      while((sidx<=size(skytruth,1)) && (gidx<=size(groundtruth,1)))
+        if(skytruth(sidx,1)<groundtruth(gidx,2))
+          groundtruth(gidx,3)=sidx;
+          skytruth(sidx,3)=gidx;
+          sidx=sidx+1;
+        end
+        if(sidx>size(skytruth,1))  break;  end
+        if(skytruth(sidx,1)>groundtruth(gidx,2))
+          gidx=gidx+1;
+          if(gidx>size(groundtruth,1))  break;  end
+        end
+        while((sidx<size(skytruth,1))&&(skytruth(sidx,2)<groundtruth(gidx,1)))
+          sidx=sidx+1;
+        end
+      end
+      if ~eof
+        misses=find(groundtruth(1:min([gidx-1 size(groundtruth,1)]),3)==0);
+        false_alarms=find(skytruth(:,3)==0);
+        hits=setdiff(1:min([gidx-1 size(groundtruth,1)]),misses);
+      else
+        misses=find(groundtruth(1:size(groundtruth,1),3)==0);
+        false_alarms=find(skytruth(:,3)==0);
+        hits=setdiff(1:size(groundtruth,1),misses);
+      end
+    end
+
+    %plot
+    if(SAVE_WAV || SAVE_PNG)
+      clf;  hold on;
+
+      [r,c]=ind2sub(syls.ImageSize,cat(1,syls.PixelIdxList{:}));
+      c=c-(CONV_SIZE(2)-1)/2+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1);
+      c=c-floor(maxNFFT/minNFFT/2)-1;
+      r=r-floor(maxNFFT/minNFFT/2)-1;
+      plot(c.*(minNFFT/2)./FS,r.*df+F_LOW,'bo');
+
+      for i=1:length(syls2)
+        for j=1:length(freq_contours{end-i+1})
+          plot(freq_contours{end-i+1}{j}(:,1),freq_contours{end-i+1}{j}(:,2),'r-');
+          plot(freq_contours2{end-i+1}{j}(:,1),freq_contours2{end-i+1}{j}(:,2),'g.');
+        end
       end
 
-      while miss_num<=min([100 size(misses,1)])
-        left=groundtruth(misses(miss_num),1);
-        right=groundtruth(misses(miss_num),2);
-        ax2_print(miss_num,left,right,'miss',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
-        miss_num=miss_num+1;
+      if(GROUNDTRUTH)
+        left =(chunk_curr-2)*CHUNK_TIME_WINDOWS(end)*maxNFFT/2/FS;
+        right=(chunk_curr-1)*CHUNK_TIME_WINDOWS(end)*maxNFFT/2/FS;
+        idx=find(((groundtruth(:,1)>=left) & (groundtruth(:,1)<=right)) | ...
+                 ((groundtruth(:,2)>=left) & (groundtruth(:,2)<=right)));
+        if(~isempty(idx))
+          line(groundtruth(idx,[1 2 2 1 1]),...
+              [F_LOW F_LOW F_HIGH F_HIGH F_LOW],'color',[0 1 0]);
+        end
       end
 
-      while fa_num<=min([100 size(false_alarms,1)])
-        left=skytruth(false_alarms(fa_num),1);
-        right=skytruth(false_alarms(fa_num),2);
-        ax2_print(fa_num,left,right,'false_alarm',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
-        fa_num=fa_num+1;
+      plot(skytruth((end-length(syls2)+1):end,[1 2 2 1 1])',...
+           skytruth((end-length(syls2)+1):end,[4 4 5 5 4])','y');
+
+      %plot(repmat(chunk_splits*minNFFT/2/FS,2,1),...
+      %     repmat([F_LOW; F_HIGH],1,length(chunk_splits)),'c');
+
+      axis tight;
+      v=axis;  axis([v(1) v(2) F_LOW F_HIGH]);
+      xlabel('time (s)');
+      ylabel('frequency (Hz)');
+
+      [b,a]=butter(4,F_LOW/(FS/2),'high');
+
+      % plot hits, misses and false alarms separately
+      if(~GROUNDTRUTH)
+        while voc_num<=min([200 size(skytruth,1)])
+          left=skytruth(voc_num,1);
+          right=skytruth(voc_num,2);
+          ax2_print(voc_num,left,right,'voc',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
+          voc_num=voc_num+1;
+        end
+      else
+        while hit_num<=min([20 length(hits)])
+          left =min([groundtruth(hits(hit_num),1) skytruth(groundtruth(hits(hit_num),3),1)]);
+          right=max([groundtruth(hits(hit_num),2) skytruth(groundtruth(hits(hit_num),3),2)]);
+          ax2_print(hit_num,left,right,'hit',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
+          hit_num=hit_num+1;
+        end
+
+        while miss_num<=min([100 size(misses,1)])
+          left=groundtruth(misses(miss_num),1);
+          right=groundtruth(misses(miss_num),2);
+          ax2_print(miss_num,left,right,'miss',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
+          miss_num=miss_num+1;
+        end
+
+        while fa_num<=min([100 size(false_alarms,1)])
+          left=skytruth(false_alarms(fa_num),1);
+          right=skytruth(false_alarms(fa_num),2);
+          ax2_print(fa_num,left,right,'false_alarm',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
+          fa_num=fa_num+1;
+        end
       end
     end
   end

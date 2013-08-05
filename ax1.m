@@ -53,7 +53,7 @@ if((nargin==5)||(nargin==9))
 end
 
 if(ischar(FS))        FS=str2num(FS);              end
-if(ischar(NFFT))  NFFT=str2num(NFFT);  end
+if(ischar(NFFT))      NFFT=str2num(NFFT);          end
 if(ischar(NW))        NW=str2num(NW);              end
 if(ischar(K))         K=str2num(K);                end
 if(ischar(PVAL))      PVAL=str2num(PVAL);          end
@@ -171,7 +171,7 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
         tmp=1+find(F(2:end,l)'>sig);
         tmp2=[];
         for m=1:length(tmp)
-          [tmp2(m,1) tmp2(m,2)]=brown2_puckette(dd(l,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1)),f,tmp(m),FS);
+          [tmp2(m,1) tmp2(m,2)]=brown_puckette(dd(l,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1)),f,tmp(m),FS);
         end
         idx{l,j,i}=tmp2;
       end
@@ -211,7 +211,8 @@ if((exist('matlabpool')==2) && (matlabpool('size')>0) && close_it)
 end
 
 
-function [freq,amp]=brown2_puckette(x,f,k,fs)
+% from charpentier (1986) and brown and puckette (1993; JASA)
+function [freq,amp]=brown_puckette(x,f,k,fs)
 
 nfft=length(x);
 X=fft(x);
