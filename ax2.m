@@ -175,7 +175,7 @@ function ax2_guts(num, F_LOW, F_HIGH, CONV_SIZE, OBJ_SIZE, ...
 GROUNDTRUTH=0;
 SAVE_WAV=0;
 SAVE_PNG=0;
-if(isempty(CHANNELS))  CHANNELS=[1:4 6:8];  end
+% if(isempty(CHANNELS))  CHANNELS=[1:4 6:8];  end
 
 if(SAVE_WAV || SAVE_PNG)
   figure;
@@ -266,7 +266,8 @@ while ~eof
         idx=size(tmp,1)+1;
       end
       if(~isempty(idx))
-        idx2=find((tmp(1:(idx-1),2)>=F_LOW) & (tmp(1:(idx-1),2)<=F_HIGH) & ismember(tmp(1:(idx-1),4),CHANNELS));
+        idx2=find((tmp(1:(idx-1),2)>=F_LOW) & (tmp(1:(idx-1),2)<=F_HIGH) & ...
+            (isempty(CHANNELS) | ismember(tmp(1:(idx-1),4),CHANNELS)));
         data(i).MT_next=tmp(idx2,:);
         data(i).MT_next(:,1)=data(i).MT_next(:,1)-(chunk_curr-1)*CHUNK_TIME_WINDOWS(i);
         fseek(fid(i),-(size(tmp,1)-idx+1)*4*8,'cof');
@@ -674,6 +675,12 @@ fclose(fid);
 
 
 function ax2_print(i,left,right,type,filename,directory,FS,NFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS)
+
+if isempty(CHANNELS)
+  d=dir([filename '.ch*']);
+  [tmp{1:length(d)}]=deal(d.name);
+  CHANNELS=cellfun(@(x) str2num(x(end)),tmp);
+end
 
 tmp=[];  p=[];
 for j=CHANNELS
