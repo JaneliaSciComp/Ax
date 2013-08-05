@@ -112,8 +112,6 @@ MT_PARAMS.fpass=[0 FS/2];
 f=(0:(NFFT/2))*FS/NFFT;
 df=f(2)-f(1);
 
-REMAP=[1:4 6:8];  % blegh
-
 [p n e]=fileparts(FILEIN);
 DIR_OUT=fullfile(p);
 FILEINs=dir([FILEIN '.ch*']);
@@ -141,6 +139,7 @@ for i=1:length(FILEINs)
     fseek(fid(i),round(START*FS)*4,-1);
     t_now_sec=START;
   end
+  REMAP(i)=str2num(FILEINs(i).name(end));
 end
 
 dd=zeros(length(fid),NFFT/2*(NWORKERS*CHUNK+1));
