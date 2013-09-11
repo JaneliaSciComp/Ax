@@ -46,7 +46,10 @@ if((exist('matlabpool')==2) && (matlabpool('size')==0))
 end
 
 if(nargin<6)
-  run(varargin{1});
+  %run(varargin{1});
+  fid=fopen(varargin{1},'r');
+  eval(fread(fid,'*char')');
+  fclose(fid);
   FILEIN=varargin{2};
   FILEOUT=varargin{3};
 else
