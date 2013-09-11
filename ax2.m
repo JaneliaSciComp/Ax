@@ -144,7 +144,7 @@ if(~isempty(tmp))
     end
   end
   parfor i=1:length(datafiles)
-  %for i=1:length(datafiles)
+%   for i=1:length(datafiles)
     ax2_guts(i, f_low, f_high, conv_size, obj_size, ...
         merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
         merge_time, nseg, min_length, channels, fullfile(data_path, datafiles{i}));
@@ -349,6 +349,7 @@ while ~eof
     for i=1:length(syls2)
       tmp=[];
       for j=1:length(data)
+        if(isempty(data(j).MT))  continue;  end
         tmpT=data(j).NFFT/minNFFT;
   %      idx=find(((tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2-floor(tmpT/2))>=syls2(i).BoundingBox(1)) & ...
   %               ((tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2+floor(tmpT/2))<=sum(syls2(i).BoundingBox([1 3]))) & ...
