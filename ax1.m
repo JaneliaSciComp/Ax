@@ -100,7 +100,7 @@ FRACTION_MT=nan;
 
 if ~isdeployed
   %[p n e]=fileparts(which('ax'));
-  addpath(genpath('~/matlab/chronux'));
+  addpath(genpath(fullfile(fileparts(mfilename('fullpath')),'chronux')));
 end
 
 MT_PARAMS=[];
@@ -176,30 +176,24 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
     dd(i,(NFFT/2+1):end)=tmp;
   end
 
-  idx=cell(NCHANNELS,CHUNK,NWORKERS);
+  idx=cell(1,NWORKERS);
   parfor i=1:NWORKERS
+%   for i=1:NWORKERS
     for j=1:CHUNK
       [F,p,f,sig,sd] = ftestc(dd(:,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1))',MT_PARAMS,PVAL/NFFT,'n');
       for l=1:NCHANNELS
         tmp=1+find(F(2:end,l)'>sig);
-        tmp2=[];
         for m=1:length(tmp)
-          [tmp2(m,1) tmp2(m,2)]=brown_puckette(dd(l,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1)),f,tmp(m),FS);
+          [freq,amp]=brown_puckette(dd(l,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1)),f,tmp(m),FS);
+          idx{i}{end+1} = [j+(i-1)*CHUNK, freq, amp, l]
         end
-        idx{l,j,i}=tmp2;
       end
     end
   end
-  idx=reshape(idx,NCHANNELS,NWORKERS*CHUNK);
-  [sub1,sub2]=ind2sub(size(idx),find(~cellfun(@isempty,idx)));
-  if(length(sub1)>0)
-    for i=1:length(sub1)
-      tmp=idx{sub1(i),sub2(i)};
-      for j=1:size(tmp,1)
-        fwrite(fid_out,[t_now+sub2(i) tmp(j,1) tmp(j,2) REMAP(sub1(i))],'double');  % blegh
-      end
+  for i=idx
+    for j=i{1}
+      fwrite(fid_out,[t_now+j{1}(1) j{1}(2:3) REMAP(j{1}(4))],'double');  % blegh
     end
-  else
   end
 
   t_now_sec=t_now_sec+NFFT/2/FS*NWORKERS*CHUNK;
