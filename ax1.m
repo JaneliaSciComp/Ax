@@ -185,7 +185,7 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
         tmp=1+find(F(2:end,l)'>sig);
         for m=1:length(tmp)
           [freq,amp]=brown_puckette(dd(l,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1)),f,tmp(m),FS);
-          idx{i}{end+1} = [j+(i-1)*CHUNK, freq, amp, l]
+          idx{i}{end+1} = [j+(i-1)*CHUNK, freq, amp, l];
         end
       end
     end

@@ -69,8 +69,11 @@ Kodd=1:2:K;
 Keven=2:2:K;
 J=mtfftc(data,tapers,nfft,Fs);% tapered fft of data - f x K x C
 Jp=J(findx,Kodd,:); % drop the even ffts and restrict fft to specified frequency grid - f x K x C
-tapers=tapers(:,:,ones(1,C)); % add channel indices to the tapers - t x K x C
-H0 = squeeze(sum(tapers(:,Kodd,:),1)); % calculate sum of tapers for even prolates - K x C 
+% tapers=tapers(:,:,ones(1,C)); % add channel indices to the tapers - t x K x C
+% H0 = squeeze(sum(tapers(:,Kodd,:),1)); % calculate sum of tapers for even prolates - K x C 
+H0 = squeeze(sum(tapers(:,Kodd),1)); % calculate sum of tapers for even prolates - K x C 
+H0=H0';
+H0 = H0(:,ones(1,C));
 if C==1;H0=H0';end;
 Nf=length(findx);% number of frequencies
 H0 = H0(:,:,ones(1,Nf)); % add frequency indices to H0 - K x C x f
