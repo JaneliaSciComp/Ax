@@ -92,7 +92,7 @@ if(NWORKERS==0)  NWORKERS=1;  end
 FS=FS/SUBSAMPLE;
 
 NFFT=2^nextpow2(NFFT*FS);  % convert to ticks
-CHUNK=round(256*1000/NFFT);  % NFFT/2 ticks
+CHUNK=round(12*256*1000/NFFT);  % NFFT/2 ticks
 
 FIRST_MT=nan;
 LAST_MT=nan;
@@ -115,8 +115,8 @@ MT_PARAMS.fpass=[0 FS/2];
 f=(0:(NFFT/2))*FS/NFFT;
 df=f(2)-f(1);
 
-[p n e]=fileparts(FILEIN);
-DIR_OUT=fullfile(p);
+[FILEPATH n e]=fileparts(FILEIN);
+DIR_OUT=fullfile(FILEPATH);
 FILEINs=dir([FILEIN '.ch*']);
 % [tmp{1:length(FILEINs)}]=deal(FILEINs.name);
 % tmp=cellfun(@(x) regexp(x,'\.ch[1-4,6-8]'), tmp,'uniformoutput',false);  % blegh
@@ -127,28 +127,33 @@ end
 NCHANNELS=length(FILEINs);
 
 for i=1:length(FILEINs)
-  fid(i)=fopen(fullfile(p,FILEINs(i).name),'r');
-  if(fid(i)==-1)
-    error(['can''t open file ''' fullfile(p,FILEINs(i).name) '''']);
+  fid=fopen(fullfile(FILEPATH,FILEINs(i).name),'r');
+  if(fid==-1)
+    error(['can''t open file ''' fullfile(FILEPATH,FILEINs(i).name) '''']);
   end
-  fseek(fid(i),0,1);
-  FILE_LEN=ftell(fid(i))/4/FS;
+  fseek(fid,0,1);
+  FILE_LEN=ftell(fid)/4/FS;
   if(~exist('START','var'))
-    disp(['Processing ' num2str(FILE_LEN/60,3) ' minutes of data in ' FILEINs(i).name]);
-    fseek(fid(i),0,-1);
+    tmp=round(FILE_LEN*FS/(NFFT/2)-1);
+    disp(['Processing ' num2str(FILE_LEN/60,3) ' min = ' num2str(tmp) ' windows = ' num2str(tmp/CHUNK,3) ' chunks of data in ' FILEINs(i).name]);
+%     fseek(fid,0,-1);
+    t_now_offset = 0;
     t_now_sec=0;
   else
-    disp(['Processing ' num2str((STOP-START)/60,3) ' minutes of data in ' FILEINs(i).name]);
-    fseek(fid(i),round(START*FS)*4,-1);
+    tmp=round((STOP-START)*FS/(NFFT/2)-1);
+    disp(['Processing ' num2str((STOP-START)/60,3) ' min = ' num2str(tmp) ' windows = ' num2str(tmp/CHUNK,3) ' chunks of data in ' FILEINs(i).name]);
+%     fseek(fid,round(START*FS)*4,-1);
+    t_now_offset = round(START*FS);
     t_now_sec=START;
   end
   REMAP(i)=str2num(FILEINs(i).name(end));
+  fclose(fid);
 end
 
-dd=zeros(length(fid),NFFT/2*(NWORKERS*CHUNK+1));
-for i=1:length(fid)
-  dd(i,(end-NFFT/2+1):end)=fread(fid(i),NFFT/2,'float32',4*(SUBSAMPLE-1));
-end
+% dd=zeros(length(fid),NFFT/2*(NWORKERS*CHUNK+1));
+% for i=1:length(fid)
+%   dd(i,(end-NFFT/2+1):end)=fread(fid(i),NFFT/2,'float32',4*(SUBSAMPLE-1));
+% end
 
 fid_out=fopen([FILEIN '-' FILEOUT '.ax'],'w');
 fwrite(fid_out,uint8([VERSION SUBSAMPLE CHUNK]),'uint8');  % CHUNK not necessary
@@ -167,24 +172,32 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
     tic;
   end
 
-  dd(:,1:(NFFT/2))=dd(:,(end-NFFT/2+1):end);
-  for i=1:length(fid)
-    [tmp count]=fread(fid(i),NFFT/2*NWORKERS*CHUNK,'float32',4*(SUBSAMPLE-1));
-    if(count<NFFT/2*NWORKERS*CHUNK)
-      tmp=[tmp; zeros(NFFT/2*NWORKERS*CHUNK-count,1)];
-    end
-    dd(i,(NFFT/2+1):end)=tmp;
-  end
-
   idx=cell(1,NWORKERS);
   parfor i=1:NWORKERS
 %   for i=1:NWORKERS
+
+%     dd(:,1:(NFFT/2))=dd(:,(end-NFFT/2+1):end);
+    NSAMPLES = NFFT/2*(CHUNK+1);
+    dd = zeros(NCHANNELS, NSAMPLES);
+    for j=1:NCHANNELS
+      fid = fopen(fullfile(FILEPATH,FILEINs(j).name),'r');
+      fseek(fid,((t_now+(i-1)*CHUNK)*NFFT/2+t_now_offset)*4,-1);
+      [tmp count] = fread(fid, NSAMPLES, 'float32', 4*(SUBSAMPLE-1));
+      if(count<NSAMPLES)
+        tmp=[tmp; zeros(NSAMPLES-count, 1)];
+      end
+      dd(j,:) = tmp;
+%       dd(i,(NFFT/2+1):end)=tmp;
+      fclose(fid);
+    end
+
     for j=1:CHUNK
-      [F,p,f,sig,sd] = ftestc(dd(:,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1))',MT_PARAMS,PVAL/NFFT,'n');
+      ddd=dd(:,(1:NFFT)+NFFT/2*(j-1));
+      [F,p,f,sig,sd] = ftestc(ddd',MT_PARAMS,PVAL/NFFT,'n');
       for l=1:NCHANNELS
         tmp=1+find(F(2:end,l)'>sig);
         for m=1:length(tmp)
-          [freq,amp]=brown_puckette(dd(l,(1:NFFT)+NFFT/2*(j+(i-1)*CHUNK-1)),f,tmp(m),FS);
+          [freq,amp]=brown_puckette(ddd(l,:),f,tmp(m),FS);
           idx{i}{end+1} = [j+(i-1)*CHUNK, freq, amp, l];
         end
       end
@@ -202,9 +215,6 @@ end
 
 fwrite(fid_out,'Z','uchar');
 fclose(fid_out);
-for i=1:length(FILEINs)
-  fclose(fid(i));
-end
 
 tstop=toc(tstart);
 disp(['Run time was ' num2str(tstop/60,3) ' minutes.']);
