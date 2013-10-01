@@ -20,4 +20,5 @@ tapers=tapers(:,:,ones(1,C)); % add channel indices to tapers
 data=data(:,:,ones(1,K)); % add taper indices to data
 data=permute(data,[1 3 2]); % reshape data to get dimensions to match those of tapers
 data_proj=data.*tapers; % product of data with tapers
-J=fft(data_proj,nfft)/Fs;   % fft of projected data
+%J=fft(data_proj,nfft)/Fs;   % fft of projected data
+J=fft(data_proj,nfft);   % fft of projected data
