@@ -33,8 +33,6 @@ if((nargin~=3)&&(nargin~=5)&&(nargin~=7)&&(nargin~=9))
   error('invalid args');
 end
 
-tstart=tic;
-
 close_it=0;
 if((exist('matlabpool')==2) && (matlabpool('size')==0))
   try
@@ -44,6 +42,8 @@ if((exist('matlabpool')==2) && (matlabpool('size')==0))
     disp('WARNING: could not open matlab pool.  proceeding with a single thread.');
   end
 end
+
+tstart=tic;
 
 if(nargin<6)
   %run(varargin{1});
@@ -105,7 +105,7 @@ MT_PARAMS=[];
 MT_PARAMS.NW=NW;
 MT_PARAMS.K=K;
 MT_PARAMS.NFFT=NFFT;
-MT_PARAMS.tapers=tapers;
+MT_PARAMS.tapers=single(tapers);
 MT_PARAMS.Fs=FS;
 MT_PARAMS.pad=0;
 MT_PARAMS.fpass=[0 FS/2];
@@ -165,13 +165,13 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
 %   for i=1:NWORKERS
 
     NSAMPLES = NFFT/2*(CHUNK+1);
-    dd = zeros(NCHANNELS, NSAMPLES);
+    dd = zeros(NCHANNELS, NSAMPLES, 'single');
     for j=1:NCHANNELS
       fid = fopen(fullfile(FILEPATH,FILEINs(j).name),'r');
       fseek(fid,((t_now+(i-1)*CHUNK)*NFFT/2+t_now_offset)*4,-1);
       [tmp count] = fread(fid, NSAMPLES, 'float32', 4*(SUBSAMPLE-1));
       if(count<NSAMPLES)
-        tmp=[tmp; zeros(NSAMPLES-count, 1)];
+        tmp=[tmp; zeros(NSAMPLES-count, 1, 'single')];
       end
       dd(j,:) = tmp;
       fclose(fid);
