@@ -101,15 +101,6 @@ FRACTION_MT=nan;
 [tapers,eigs]=dpss(NFFT,NW,K);
 %tapers = tapers*sqrt(FS);
 
-MT_PARAMS=[];
-MT_PARAMS.NW=NW;
-MT_PARAMS.K=K;
-MT_PARAMS.NFFT=NFFT;
-MT_PARAMS.tapers=single(tapers);
-MT_PARAMS.Fs=FS;
-MT_PARAMS.pad=0;
-MT_PARAMS.fpass=[0 FS/2];
-
 f=(0:(NFFT/2))*FS/NFFT;
 df=f(2)-f(1);
 
@@ -179,11 +170,11 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
 
     for j=1:CHUNK
       ddd=dd(:,(1:NFFT)+NFFT/2*(j-1));
-      [F,p,f,sig,sd] = ftestc(ddd',MT_PARAMS,PVAL/NFFT,'n');
+      [F,sig] = ftestc(ddd',tapers,PVAL);
       for l=1:NCHANNELS
         tmp=1+find(F(2:end,l)'>sig);
         for m=1:length(tmp)
-          [freq,amp]=brown_puckette(ddd(l,:),f,tmp(m),FS);
+          [freq,amp]=brown_puckette(ddd(l,:),tmp(m),FS);
           idx{i}{end+1} = [j+(i-1)*CHUNK, freq, amp, l];
         end
       end
@@ -215,80 +206,53 @@ end
 
 
 % from Chronux
-function J=mtfftc(data,tapers,nfft,Fs)
-if nargin < 4; error('Need all input arguments'); end;
-[NC,C]=size(data); % size of data
-[NK K]=size(tapers); % size of tapers
-if NK~=NC; error('length of tapers is incompatible with length of data'); end;
-tapers=tapers(:,:,ones(1,C)); % add channel indices to tapers
-data=permute(data,[1 3 2]); % reshape data to get dimensions to match those of tapers
-data=data(:,ones(1,K),:); % add taper indices to data
-data_proj=data.*tapers; % product of data with tapers
-J=fft(data_proj,nfft);   % fft of projected data
+function [Fval,sig] = ftestc(data,tapers,pval)
+[NC,C]=size(data);
+[NK,K]=size(tapers);
+N=NC;
 
-
-% from Chronux
-function [Fval,A,f,sig,sd] = ftestc(data,params,p,plt)
-if nargin < 1; error('Need data'); end;
-if nargin < 2 || isempty(params); params=[]; end;
-
-%[tapers,pad,Fs,fpass,err,trialave,params]=getparams(params);
-tapers=params.tapers;
-pad=params.pad;
-Fs=params.Fs;
-fpass=params.fpass;
-
-% data=change_row_to_column(data);
-[N,C]=size(data);
-if nargin<3 || isempty(p);p=0.05/N;end;
-if nargin<4 || isempty(plt); plt='n';end;
-
-% tapers=dpsschk(tapers,N,Fs); % calculate the tapers
-[N,K]=size(tapers);
-nfft=max(2^(nextpow2(N)+pad),N);% number of points in fft
-
-%[f,findx]=getfgrid(Fs,nfft,fpass);% frequency grid to be returned
-df=Fs/nfft;
-f=0:df:Fs; % all possible frequencies
-f=f(1:nfft);
-findx=find(f>=fpass(1) & f<=fpass(end));
-f=f(findx);
+% df=Fs/nfft;
+% f=0:df:Fs; % all possible frequencies
+% f=f(1:nfft);
+% findx=find(f>=fpass(1) & f<=fpass(end));
+% f=f(findx);
 
 Kodd=1:2:K;
 Keven=2:2:K;
-J=mtfftc(data,tapers,nfft,Fs);% tapered fft of data - f x K x C
-Jp=J(findx,Kodd,:); % drop the even ffts and restrict fft to specified frequency grid - f x K x C
-H0 = squeeze(sum(tapers(:,Kodd),1)); % calculate sum of tapers for even prolates - K x C 
-Nf=length(findx);% number of frequencies
-H0sq = sum(H0.*H0)*ones(Nf,C);
-H0=H0(ones(1,Nf),:,ones(1,C));
-JpH0=squeeze(sum(Jp.*H0,2));% sum of the product of Jp and H0 across taper indices - f x C
-A=JpH0./H0sq; % amplitudes for all frequencies and channels
-Kp=size(Jp,2); % number of even prolates
-Ap=permute(A,[1 3 2]); % permute indices to match those of H0
-Ap=Ap(:,ones(1,Kp),:); % add the taper index to C
-Jhat=Ap.*H0; % fitted value for the fft
 
-num=(K-1).*(abs(A).^2).*squeeze(H0sq);%numerator for F-statistic
+data=permute(data,[1 3 2]); % reshape data to get dimensions to match those of tapers
+data_proj=bsxfun(@times,data,tapers); % product of data with tapers
+J=fft(data_proj,N);   % fft of projected data
+
+Jp=J(1:(N/2+1),Kodd,:); % drop the even ffts and restrict fft to specified frequency grid - f x K x C
+H0 = sum(tapers(:,Kodd),1); % calculate sum of tapers for even prolates - 1 x K
+H0sq = sum(H0.*H0);  % 1
+JpH0=squeeze(sum(bsxfun(@times,Jp,H0),2));% sum of the product of Jp and H0 across taper indices - f x C
+A=JpH0./H0sq; % amplitudes for all frequencies and channels - f x C
+Kp=size(Jp,2); % number of even prolates
+Ap=permute(A,[1 3 2]); % permute indices to match those of H0 - f x 1 x C
+Jhat=bsxfun(@times, Ap, H0); % fitted value for the fft
+
+num=(K-1).*(abs(A).^2).*H0sq;%numerator for F-statistic
 %den=squeeze(sum(abs(Jp-Jhat).^2,2)+sum(abs(J(findx,Keven,:)).^2,2));% denominator for F-statistic
 den1=Jp-Jhat;
 den1=real(den1).*real(den1)+imag(den1).*imag(den1);
 den1=squeeze(sum(den1,2));
-den2=J(findx,Keven,:);
+den2=J(1:(N/2+1),Keven,:);
 den2=real(den2).*real(den2)+imag(den2).*imag(den2);
 den2=squeeze(sum(den2,2));
 den = den1 + den2;
 Fval=num./den; % F-statisitic
 
-sig=finv(1-p,2,2*K-2); % F-distribution based 1-p% point
-var=den./(K*squeeze(H0sq)); % variance of amplitude
-sd=sqrt(var);% standard deviation of amplitude
-
-A=A*Fs;
+sig=finv(1-pval/N,2,2*K-2); % F-distribution based 1-p% point
+% var=den./(K*squeeze(H0sq)); % variance of amplitude
+% sd=sqrt(var);% standard deviation of amplitude
+% 
+% A=A*Fs;
 
 
 % from charpentier (1986) and brown and puckette (1993; JASA)
-function [freq,amp]=brown_puckette(x,f,k,fs)
+function [freq,amp]=brown_puckette(x,k,fs)
 
 nfft=length(x);
 X=fft(x);
