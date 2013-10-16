@@ -104,6 +104,8 @@ FRACTION_MT=nan;
 f=(0:(NFFT/2))*FS/NFFT;
 df=f(2)-f(1);
 
+sig=finv(1-PVAL/NFFT,2,2*K-2); % F-distribution based 1-p% point
+
 [FILEPATH n e]=fileparts(FILEIN);
 DIR_OUT=fullfile(FILEPATH);
 FILEINs=dir([FILEIN '.ch*']);
@@ -170,7 +172,7 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
 
     for j=1:CHUNK
       ddd=dd(:,(1:NFFT)+NFFT/2*(j-1));
-      [F,sig] = ftestc(ddd',tapers,PVAL);
+      F = ftestc(ddd',tapers,PVAL);
       for l=1:NCHANNELS
         tmp=1+find(F(2:end,l)'>sig);
         for m=1:length(tmp)
@@ -206,7 +208,7 @@ end
 
 
 % from Chronux
-function [Fval,sig] = ftestc(data,tapers,pval)
+function Fval = ftestc(data,tapers,pval)
 [NC,C]=size(data);
 [NK,K]=size(tapers);
 N=NC;
@@ -220,21 +222,21 @@ N=NC;
 Kodd=1:2:K;
 Keven=2:2:K;
 
-data=permute(data,[1 3 2]); % reshape data to get dimensions to match those of tapers
-data_proj=bsxfun(@times,data,tapers); % product of data with tapers
-J=fft(data_proj,N);   % fft of projected data
+data=permute(data,[1 3 2]);
+data_proj=bsxfun(@times,data,tapers);
+J=fft(data_proj,N);
 
-Jp=J(1:(N/2+1),Kodd,:); % drop the even ffts and restrict fft to specified frequency grid - f x K x C
-H0 = sum(tapers(:,Kodd),1); % calculate sum of tapers for even prolates - 1 x K
-H0sq = sum(H0.*H0);  % 1
-JpH0=squeeze(sum(bsxfun(@times,Jp,H0),2));% sum of the product of Jp and H0 across taper indices - f x C
-A=JpH0./H0sq; % amplitudes for all frequencies and channels - f x C
-Kp=size(Jp,2); % number of even prolates
-Ap=permute(A,[1 3 2]); % permute indices to match those of H0 - f x 1 x C
-Jhat=bsxfun(@times, Ap, H0); % fitted value for the fft
+Jp=J(1:(N/2+1),Kodd,:);                     % f x K x C
+H0 = sum(tapers(:,Kodd),1);                 % 1 x K
+H0sq = sum(H0.*H0);                         % 1
+JpH0=squeeze(sum(bsxfun(@times,Jp,H0),2));  % f x C
+A=JpH0./H0sq;                               % f x C
+Kp=size(Jp,2);
+Ap=permute(A,[1 3 2]);                      % f x 1 x C
+Jhat=bsxfun(@times, Ap, H0);
 
-num=(K-1).*(abs(A).^2).*H0sq;%numerator for F-statistic
-%den=squeeze(sum(abs(Jp-Jhat).^2,2)+sum(abs(J(findx,Keven,:)).^2,2));% denominator for F-statistic
+num=(K-1).*(abs(A).^2).*H0sq;
+%den=squeeze(sum(abs(Jp-Jhat).^2,2)+sum(abs(J(findx,Keven,:)).^2,2));
 den1=Jp-Jhat;
 den1=real(den1).*real(den1)+imag(den1).*imag(den1);
 den1=squeeze(sum(den1,2));
@@ -242,9 +244,9 @@ den2=J(1:(N/2+1),Keven,:);
 den2=real(den2).*real(den2)+imag(den2).*imag(den2);
 den2=squeeze(sum(den2,2));
 den = den1 + den2;
-Fval=num./den; % F-statisitic
+Fval=num./den;
 
-sig=finv(1-pval/N,2,2*K-2); % F-distribution based 1-p% point
+%sig=finv(1-pval/N,2,2*K-2); % F-distribution based 1-p% point
 % var=den./(K*squeeze(H0sq)); % variance of amplitude
 % sd=sqrt(var);% standard deviation of amplitude
 % 
