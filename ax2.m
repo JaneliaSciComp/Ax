@@ -660,16 +660,17 @@ for i=1:length(data)
   end
   fprintf(fid,'\n');
 end
-fprintf(fid,'%s=%g;\n',varname(OBJ_SIZE),OBJ_SIZE);
-fprintf(fid,'%s=[%g %g];\n',varname(CONV_SIZE),CONV_SIZE);
 fprintf(fid,'%s=%g;\n',varname(F_LOW),F_LOW);
 fprintf(fid,'%s=%g;\n',varname(F_HIGH),F_HIGH);
-fprintf(fid,'%s=%g;\n',varname(NSEG),NSEG);
-fprintf(fid,'%s=%g;\n',varname(MERGE_TIME),MERGE_TIME);
+fprintf(fid,'%s=[%g %g];\n',varname(CONV_SIZE),CONV_SIZE);
+fprintf(fid,'%s=%g;\n',varname(OBJ_SIZE),OBJ_SIZE);
 fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ),MERGE_FREQ);
 fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ_OVERLAP),MERGE_FREQ_OVERLAP);
 fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ_RATIO),MERGE_FREQ_RATIO);
 fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ_FRACTION),MERGE_FREQ_FRACTION);
+fprintf(fid,'%s=%g;\n',varname(MERGE_TIME),MERGE_TIME);
+fprintf(fid,'%s=%g;\n',varname(NSEG),NSEG);
+fprintf(fid,'%s=%g;\n',varname(MIN_LENGTH),MIN_LENGTH);
 fprintf(fid,'%s=[%s];\n',varname(CHANNELS),num2str(CHANNELS));
 fclose(fid);
 
