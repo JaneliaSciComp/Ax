@@ -10,11 +10,11 @@ Designed for audio recordings of behaving animals.
 
 SYSTEM REQUIREMENTS
 
-A recent version of Matlab.  Tested with 2012a and 2013a.  Alternatively,
-binary executables are available upon request.
+A recent version of Matlab (tested with 2012a, 2013a, and 2013b).
+Alternatively, ax1 has been ported to Python and Julia.
 
-Parallel Computing Toolbox and a computer with a lot cores is highly
-recommended.
+A computer with a lot cores is highly recommended, or better yet,
+a small cluster.
 
 
 FILES
