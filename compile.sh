@@ -18,8 +18,7 @@ mkdir -p ax1
   -w enable:switch_ignored \
   -w enable:missing_lib_sentinel \
   -w enable:demo_license \
-  -v ax1.m \
-  -a chronux
+  -v ax1.m
 
 mkdir -p ax2
 
