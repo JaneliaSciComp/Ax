@@ -21,6 +21,15 @@ then
   exit
 fi
 
+if [ -d $2 ] ; then
+  ii=$(ls -1 ${2%/}/*.ch* | sed s/\.ch[0-9]*// | uniq)
+  dir_name=$2
+else
+  ii=$2
+  dir_name=$(dirname $2)
+fi
+#echo $ii
+
 if [ $3 -eq 1 ]
 then
   echo starting ax1
@@ -63,22 +72,15 @@ then
   #echo ${PVAL[@]}
   #echo ${NFFT[@]}
 
-  if [ -d $2 ] ; then
-    ii=$(ls -1 $2/*.ch* | sed s/.ch[0-9]// | uniq)
-    dir_name=$2
-  else
-    ii=$2
-    dir_name=$(dirname $2)
-  fi
   k=0
   for i in $ii
   do
-  #  echo $i
+    #echo $i
     job_name=$(basename $i)
     for j in $(seq 0 $((${#NFFT[@]} - 1)))
     do
       k=$((k+1))
-  #    echo $j
+      #echo $j
       qsub -N "$job_name-$j" \
           -pe batch 12 \
           -l new=true \
@@ -88,8 +90,11 @@ then
   done
 
   echo waiting for ax1 to finish
+  # this won't work if .log files already exist from a previous run
+  iii=$(sed s/$/*.log/ <<< "$ii")
+  #echo $iii
   sleep 1m
-  while [ $(grep "Run time was " $2/*.log | wc -l) -ne $k ]
+  while [ $(grep "Run time was " $iii | wc -l) -ne $k ]
   do
     sleep 1m
   done
@@ -97,13 +102,6 @@ then
 fi
 
 echo starting ax2
-if [ -d $2 ] ; then
-  ii=$(ls -1 $2/*.ch* | sed s/.ch[0-9]// | uniq)
-  dir_name=$2
-else
-  ii=$2
-  dir_name=$(dirname $2)
-fi
 for i in $ii
 do
   job_name=$(basename $i)
