@@ -1,6 +1,6 @@
 % function ax2(f_low, f_high, conv_size, obj_size, ...
 %     merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
-%     merge_time, nseg, min_length, ...
+%     min_length, ...
 %     channels, data_path)
 % function ax2(params_file, data_path)
 %
@@ -22,9 +22,6 @@
 %     merge_freq_overlap is the fraction in time two segments must overlap
 %     merge_freq_ratio is the tolerance in frequency ratio two segments must be within
 %     merge_freq_fraction is the fraction of the overlap that must be within the ratio tolerance
-%   merge_time is the maximum gap length, in seconds, below which vocalizations
-%     are combined;  use 0 to not combine
-%   nseg is the minimum number of merged segments a vocalization must contain
 %   min_length is the minimum syllable length in sec
 %   channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
 %   data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
@@ -66,7 +63,7 @@ switch nargin
         error('Could not load the parameters from %s (%s)', varargin{1}, ME.message);
     end
     data_path=varargin{2};
-  case 13
+  case 11
     f_low=varargin{1};
     f_high=varargin{2};
     conv_size=varargin{3};
@@ -75,11 +72,9 @@ switch nargin
     merge_freq_overlap=varargin{6};
     merge_freq_ratio=varargin{7};
     merge_freq_fraction=varargin{8};
-    merge_time=varargin{9};
-    nseg=varargin{10};
-    min_length=varargin{11};
-    channels=varargin{12};
-    data_path=varargin{13};
+    min_length=varargin{9};
+    channels=varargin{10};
+    data_path=varargin{11};
   otherwise
     error('invalid args');
 end
@@ -113,14 +108,6 @@ if (isempty(merge_freq_fraction) || (merge_freq_fraction<0) || (merge_freq_fract
   error('merge_freq_fraction must be between 0 and 1');
 end
 
-if (isempty(merge_time) || (merge_time<0))
-  error('merge_time must be a non-negative real number');
-end
-
-if (isempty(nseg) || (nseg~=round(nseg)) || (nseg<1))
-  warndlg('nseg must be a positive integer');
-end
-
 if (isempty(min_length) || (min_length<0))
   warndlg('min_length must be a non-negative real number');
 end
@@ -147,7 +134,7 @@ if(~isempty(tmp))
 %   for i=1:length(datafiles)
     ax2_guts(i, f_low, f_high, conv_size, obj_size, ...
         merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
-        merge_time, nseg, min_length, channels, fullfile(data_path, datafiles{i}));
+        min_length, channels, fullfile(data_path, datafiles{i}));
   end
   if((exist('matlabpool')==2) && (matlabpool('size')>0) && close_it)
     try
@@ -161,7 +148,7 @@ else
   if(~isempty(tmp))
     ax2_guts(0, f_low, f_high, conv_size, obj_size, ...
         merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
-        merge_time, nseg, min_length, channels, data_path);
+        min_length, channels, data_path);
   else
     error(['can''t find ' data_path]);
   end
@@ -170,7 +157,7 @@ end
 
 function ax2_guts(num, F_LOW, F_HIGH, CONV_SIZE, OBJ_SIZE, ...
     MERGE_FREQ, MERGE_FREQ_OVERLAP, MERGE_FREQ_RATIO, MERGE_FREQ_FRACTION, ...
-    MERGE_TIME, NSEG, MIN_LENGTH, CHANNELS, filename)
+    MIN_LENGTH, CHANNELS, filename)
 
 GROUNDTRUTH=0;
 SAVE_WAV=0;
@@ -222,7 +209,6 @@ skytruth=[];
 freq_contours={};
 freq_contours2={};
 freq_histograms={};
-MERGE_TIME_WINDOWS=MERGE_TIME*FS/minNFFT*2;
 voc_num=1;
 hit_num=1;
 miss_num=1;
@@ -444,52 +430,6 @@ while ~eof
       freq_histogram={freq_histogram{idx}};
     end
 
-    %merge temporally nearby syllables
-    if(MERGE_TIME_WINDOWS~=0)
-      syls3=ones(1,length(syls2));
-      for i=1:(length(syls2)-1)
-        if(isempty(syls.PixelIdxList{i}))  continue;  end
-        flag=1;
-        while(flag)
-          flag=0;
-          for j=(i+1):length(syls2)
-            if(isempty(syls.PixelIdxList{j}))  continue;  end
-            if(((sum(syls2(i).BoundingBox([1 3]))+MERGE_TIME_WINDOWS) > syls2(j).BoundingBox(1)) &&...
-               ((sum(syls2(j).BoundingBox([1 3]))+MERGE_TIME_WINDOWS) > syls2(i).BoundingBox(1)))
-              flag=1;
-              syls.PixelIdxList{i}=[syls.PixelIdxList{i}; syls.PixelIdxList{j}];
-              syls.PixelIdxList{j}=[];
-              syls2(i).BoundingBox(1)=...
-                  min([syls2(i).BoundingBox(1) syls2(j).BoundingBox(1)]);
-              syls2(i).BoundingBox(2)=...
-                  min([syls2(i).BoundingBox(2) syls2(j).BoundingBox(2)]);
-              syls2(i).BoundingBox(3)=...
-                  max([sum(syls2(i).BoundingBox([1 3])) sum(syls2(j).BoundingBox([1 3]))])-...
-                  syls2(i).BoundingBox(1);
-              syls2(i).BoundingBox(4)=...
-                  max([sum(syls2(i).BoundingBox([2 4])) sum(syls2(j).BoundingBox([2 4]))])-...
-                  syls2(i).BoundingBox(2);
-              syls3(i)=syls3(i)+syls3(j);
-              syls3(j)=0;
-              freq_contour{i}={freq_contour{i}{:} freq_contour{j}{:}};
-              freq_contour{j}=[];
-              freq_contour2{i}={freq_contour2{i}{:} freq_contour2{j}{:}};
-              freq_contour2{j}=[];
-              freq_histogram{i}=[freq_histogram{i} freq_histogram{j}];
-              freq_histogram{j}=[];
-            end
-          end
-        end
-      end
-      idx=find(syls3>=NSEG);
-      syls.NumObjects=length(idx);
-      syls.PixelIdxList={syls.PixelIdxList{idx}};
-      syls2=regionprops(syls,'basic');
-      freq_contour={freq_contour{idx}};
-      freq_contour2={freq_contour2{idx}};
-      freq_histogram={freq_histogram{idx}};
-    end
-
     %cull short syllables
     if(MIN_LENGTH>0)
       reshape([syls2.BoundingBox],4,length(syls2))';
@@ -668,8 +608,6 @@ fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ),MERGE_FREQ);
 fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ_OVERLAP),MERGE_FREQ_OVERLAP);
 fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ_RATIO),MERGE_FREQ_RATIO);
 fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ_FRACTION),MERGE_FREQ_FRACTION);
-fprintf(fid,'%s=%g;\n',varname(MERGE_TIME),MERGE_TIME);
-fprintf(fid,'%s=%g;\n',varname(NSEG),NSEG);
 fprintf(fid,'%s=%g;\n',varname(MIN_LENGTH),MIN_LENGTH);
 fprintf(fid,'%s=[%s];\n',varname(CHANNELS),num2str(CHANNELS));
 fclose(fid);

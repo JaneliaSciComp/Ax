@@ -13,6 +13,4 @@ merge_freq=0;
 merge_freq_overlap=0.9;
 merge_freq_ratio=0.1;
 merge_freq_fraction=0.9;
-merge_time=0;
-nseg=1;
 min_length=0;
