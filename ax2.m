@@ -1,5 +1,5 @@
 % function ax2(f_low, f_high, conv_size, obj_size, ...
-%     merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
+%     merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
 %     min_length, ...
 %     channels, data_path)
 % function ax2(params_file, data_path)
@@ -18,10 +18,10 @@
 %   f_low, f_high are in Hz
 %   conv_size is [height_freq width_time] in pixels, each must be odd
 %   obj_size is in pixels
-%   set merge_freq to 1 to collapse harmonically related syllables, 0 otherwise
-%     merge_freq_overlap is the fraction in time two segments must overlap
-%     merge_freq_ratio is the tolerance in frequency ratio two segments must be within
-%     merge_freq_fraction is the fraction of the overlap that must be within the ratio tolerance
+%   set merge_harmonics to 1 to collapse harmonically related syllables, 0 otherwise
+%     merge_harmonics_overlap is the fraction in time two segments must overlap
+%     merge_harmonics_ratio is the tolerance in frequency ratio two segments must be within
+%     merge_harmonics_fraction is the fraction of the overlap that must be within the ratio tolerance
 %   min_length is the minimum syllable length in sec
 %   channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
 %   data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
@@ -68,10 +68,10 @@ switch nargin
     f_high=varargin{2};
     conv_size=varargin{3};
     obj_size=varargin{4};
-    merge_freq=varargin{5};
-    merge_freq_overlap=varargin{6};
-    merge_freq_ratio=varargin{7};
-    merge_freq_fraction=varargin{8};
+    merge_harmonics=varargin{5};
+    merge_harmonics_overlap=varargin{6};
+    merge_harmonics_ratio=varargin{7};
+    merge_harmonics_fraction=varargin{8};
     min_length=varargin{9};
     channels=varargin{10};
     data_path=varargin{11};
@@ -92,20 +92,20 @@ if(isempty(obj_size) || (obj_size<0) || (obj_size~=round(obj_size)))
   error('obj_size should be a non-negative integer');
 end
 
-if (isempty(merge_freq) || ((merge_freq~=0) && (merge_freq~=1)))
-  error('merge_freq must be 0 or 1');
+if (isempty(merge_harmonics) || ((merge_harmonics~=0) && (merge_harmonics~=1)))
+  error('merge_harmonics must be 0 or 1');
 end
 
-if (isempty(merge_freq_overlap) || ((merge_freq_overlap<0) || (merge_freq_overlap>1)))
-  error('merge_freq_overlap must be between 0 and 1');
+if (isempty(merge_harmonics_overlap) || ((merge_harmonics_overlap<0) || (merge_harmonics_overlap>1)))
+  error('merge_harmonics_overlap must be between 0 and 1');
 end
 
-if (isempty(merge_freq_ratio) || (merge_freq_ratio<0))
-  error('merge_freq_ratio must be a non-negative real number');
+if (isempty(merge_harmonics_ratio) || (merge_harmonics_ratio<0))
+  error('merge_harmonics_ratio must be a non-negative real number');
 end
 
-if (isempty(merge_freq_fraction) || (merge_freq_fraction<0) || (merge_freq_fraction>1))
-  error('merge_freq_fraction must be between 0 and 1');
+if (isempty(merge_harmonics_fraction) || (merge_harmonics_fraction<0) || (merge_harmonics_fraction>1))
+  error('merge_harmonics_fraction must be between 0 and 1');
 end
 
 if (isempty(min_length) || (min_length<0))
@@ -133,7 +133,7 @@ if(~isempty(tmp))
   parfor i=1:length(datafiles)
 %   for i=1:length(datafiles)
     ax2_guts(i, f_low, f_high, conv_size, obj_size, ...
-        merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
+        merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
         min_length, channels, fullfile(data_path, datafiles{i}));
   end
   if((exist('matlabpool')==2) && (matlabpool('size')>0) && close_it)
@@ -147,7 +147,7 @@ else
   tmp=dir([data_path '*.ax']);
   if(~isempty(tmp))
     ax2_guts(0, f_low, f_high, conv_size, obj_size, ...
-        merge_freq, merge_freq_overlap, merge_freq_ratio, merge_freq_fraction, ...
+        merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
         min_length, channels, data_path);
   else
     error(['can''t find ' data_path]);
@@ -156,7 +156,7 @@ end
 
 
 function ax2_guts(num, F_LOW, F_HIGH, CONV_SIZE, OBJ_SIZE, ...
-    MERGE_FREQ, MERGE_FREQ_OVERLAP, MERGE_FREQ_RATIO, MERGE_FREQ_FRACTION, ...
+    MERGE_HARMONICS, MERGE_HARMONICS_OVERLAP, MERGE_HARMONICS_RATIO, MERGE_HARMONICS_FRACTION, ...
     MIN_LENGTH, CHANNELS, filename)
 
 GROUNDTRUTH=0;
@@ -366,7 +366,7 @@ while ~eof
     end
 
     %merge harmonically related syllables
-    if(MERGE_FREQ~=0)
+    if(MERGE_HARMONICS~=0)
       syls3=ones(1,length(syls2));
       for i=1:(length(syls2)-1)
         if(isempty(syls.PixelIdxList{i}))  continue;  end
@@ -378,8 +378,8 @@ while ~eof
             doit=false;  position=nan(1,length(freq_contour{i}));
             for k=1:length(freq_contour{i})
               [c,ii,jj]=intersect(freq_contour{i}{k}(:,1),freq_contour{j}{1}(:,1));
-              if((length(c)/size(freq_contour{i}{k},1)<MERGE_FREQ_OVERLAP) && ...
-                 (length(c)/size(freq_contour{j}{1},1)<MERGE_FREQ_OVERLAP))
+              if((length(c)/size(freq_contour{i}{k},1)<MERGE_HARMONICS_OVERLAP) && ...
+                 (length(c)/size(freq_contour{j}{1},1)<MERGE_HARMONICS_OVERLAP))
                 continue;
               end
               %doit=doit | ...
@@ -387,7 +387,7 @@ while ~eof
               %        [1/3 1/2 2/3 3/2 2 3]-1)<MERGE_FREQ_RATIO)...
               %    >(MERGE_FREQ_FRACTION*length(c)));
               sum(abs((freq_contour{i}{k}(ii,2)./freq_contour{j}{1}(jj,2))*...
-                  [1/3 1/2 2/3 3/2 2 3]-1)<MERGE_FREQ_RATIO)>(MERGE_FREQ_FRACTION*length(c));
+                  [1/3 1/2 2/3 3/2 2 3]-1)<MERGE_HARMONICS_RATIO)>(MERGE_HARMONICS_FRACTION*length(c));
               doit=doit | sum(ans);
               find(ans,1,'first');
               if(~isempty(ans))
@@ -604,10 +604,10 @@ fprintf(fid,'%s=%g;\n',varname(F_LOW),F_LOW);
 fprintf(fid,'%s=%g;\n',varname(F_HIGH),F_HIGH);
 fprintf(fid,'%s=[%g %g];\n',varname(CONV_SIZE),CONV_SIZE);
 fprintf(fid,'%s=%g;\n',varname(OBJ_SIZE),OBJ_SIZE);
-fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ),MERGE_FREQ);
-fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ_OVERLAP),MERGE_FREQ_OVERLAP);
-fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ_RATIO),MERGE_FREQ_RATIO);
-fprintf(fid,'%s=%g;\n',varname(MERGE_FREQ_FRACTION),MERGE_FREQ_FRACTION);
+fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS),MERGE_HARMONICS);
+fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS_OVERLAP),MERGE_HARMONICS_OVERLAP);
+fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS_RATIO),MERGE_HARMONICS_RATIO);
+fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS_FRACTION),MERGE_HARMONICS_FRACTION);
 fprintf(fid,'%s=%g;\n',varname(MIN_LENGTH),MIN_LENGTH);
 fprintf(fid,'%s=[%s];\n',varname(CHANNELS),num2str(CHANNELS));
 fclose(fid);
