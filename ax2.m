@@ -1,6 +1,6 @@
-% function ax2(f_low, f_high, convolution_size, minimum_object_area, ...
+% function ax2(frequency_low, frequency_high, convolution_size, minimum_object_area, ...
 %     merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
-%     min_length, ...
+%     minimum_vocalization_length, ...
 %     channels, data_path)
 % function ax2(params_file, data_path)
 %
@@ -15,14 +15,14 @@
 % elongated pixels.
 %
 % input arguments:
-%   f_low, f_high are in Hz
+%   frequency_low, frequency_high are in Hz
 %   convolution_size is [frequency time] in Hz and sec
 %   minimum_object_area is in Hz-sec
 %   set merge_harmonics to 1 to collapse harmonically related syllables, 0 otherwise
 %     merge_harmonics_overlap is the fraction in time two segments must overlap
 %     merge_harmonics_ratio is the tolerance in frequency ratio two segments must be within
 %     merge_harmonics_fraction is the fraction of the overlap that must be within the ratio tolerance
-%   min_length is the minimum syllable length in sec
+%   minimum_vocalization_length is the minimum vocalization length in sec
 %   channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
 %   data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
 %
@@ -64,23 +64,23 @@ switch nargin
     end
     data_path=varargin{2};
   case 11
-    f_low=varargin{1};
-    f_high=varargin{2};
+    frequency_low=varargin{1};
+    frequency_high=varargin{2};
     convolution_size=varargin{3};
     minimum_object_area=varargin{4};
     merge_harmonics=varargin{5};
     merge_harmonics_overlap=varargin{6};
     merge_harmonics_ratio=varargin{7};
     merge_harmonics_fraction=varargin{8};
-    min_length=varargin{9};
+    minimum_vocalization_length=varargin{9};
     channels=varargin{10};
     data_path=varargin{11};
   otherwise
     error('invalid args');
 end
 
-if(isempty(f_low) || isempty(f_high) || (f_low<0) || (f_high<0) || (f_low>=f_high))
-  error('f_low should be less than f_high and both should be non-negative real numbers');
+if(isempty(frequency_low) || isempty(frequency_high) || (frequency_low<0) || (frequency_high<0) || (frequency_low>=frequency_high))
+  error('frequency_low should be less than frequency_high and both should be non-negative real numbers');
 end
 
 if(isempty(convolution_size) || (length(convolution_size)~=2))
@@ -107,8 +107,8 @@ if (isempty(merge_harmonics_fraction) || (merge_harmonics_fraction<0) || (merge_
   error('merge_harmonics_fraction must be between 0 and 1');
 end
 
-if (isempty(min_length) || (min_length<0))
-  warndlg('min_length must be a non-negative real number');
+if (isempty(minimum_vocalization_length) || (minimum_vocalization_length<0))
+  warndlg('minimum_vocalization_length must be a non-negative real number');
 end
 
 tmp=dir(fullfile(data_path,'*.ax'));
@@ -131,9 +131,9 @@ if(~isempty(tmp))
   end
   parfor i=1:length(datafiles)
 %   for i=1:length(datafiles)
-    ax2_guts(i, f_low, f_high, convolution_size, minimum_object_area, ...
+    ax2_guts(i, frequency_low, frequency_high, convolution_size, minimum_object_area, ...
         merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
-        min_length, channels, fullfile(data_path, datafiles{i}));
+        minimum_vocalization_length, channels, fullfile(data_path, datafiles{i}));
   end
   if((exist('matlabpool')==2) && (matlabpool('size')>0) && close_it)
     try
@@ -145,18 +145,18 @@ if(~isempty(tmp))
 else
   tmp=dir([data_path '*.ax']);
   if(~isempty(tmp))
-    ax2_guts(0, f_low, f_high, convolution_size, minimum_object_area, ...
+    ax2_guts(0, frequency_low, frequency_high, convolution_size, minimum_object_area, ...
         merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
-        min_length, channels, data_path);
+        minimum_vocalization_length, channels, data_path);
   else
     error(['can''t find ' data_path]);
   end
 end
 
 
-function ax2_guts(num, F_LOW, F_HIGH, CONVOLUTION_SIZE, MINIMUM_OBJECT_AREA, ...
+function ax2_guts(num, FREQUENCY_LOW, FREQUENCY_HIGH, CONVOLUTION_SIZE, MINIMUM_OBJECT_AREA, ...
     MERGE_HARMONICS, MERGE_HARMONICS_OVERLAP, MERGE_HARMONICS_RATIO, MERGE_HARMONICS_FRACTION, ...
-    MIN_LENGTH, CHANNELS, filename)
+    MINIMUM_VOCALIZATION_LENGTH, CHANNELS, filename)
 
 GROUNDTRUTH=0;
 SAVE_WAV=0;
@@ -254,7 +254,7 @@ while ~eof
         idx=size(tmp,1)+1;
       end
       if(~isempty(idx))
-        idx2=find((tmp(1:(idx-1),2)>=F_LOW) & (tmp(1:(idx-1),2)<=F_HIGH) & ...
+        idx2=find((tmp(1:(idx-1),2)>=FREQUENCY_LOW) & (tmp(1:(idx-1),2)<=FREQUENCY_HIGH) & ...
             (isempty(CHANNELS) | ismember(tmp(1:(idx-1),4),CHANNELS)));
         data(i).MT_next=tmp(idx2,:);
         data(i).MT_next(:,1)=data(i).MT_next(:,1)-(chunk_curr-1)*CHUNK_TIME_WINDOWS(i);
@@ -264,7 +264,7 @@ while ~eof
     end
   end
 
-  sizeF=ceil(F_HIGH/df)-floor(F_LOW/df)+2*floor(maxNFFT/minNFFT/2)+1;
+  sizeF=ceil(FREQUENCY_HIGH/df)-floor(FREQUENCY_LOW/df)+2*floor(maxNFFT/minNFFT/2)+1;
   sizeT=CHUNK_TIME_WINDOWS(1)+2*floor(maxNFFT/minNFFT/2)+1;
   im_next=false(sizeF,sizeT);
 
@@ -277,7 +277,7 @@ while ~eof
     for i=(-floor(tmpF/2):floor(tmpF/2))+floor(maxNFFT/minNFFT/2)+1
       for n=(-floor(tmpT/2):floor(tmpT/2))+floor(maxNFFT/minNFFT/2)+1
         im_next(sub2ind([sizeF,sizeT],...
-            round(data(k).MT_next(:,2)/df)+i-floor(F_LOW/df), ...
+            round(data(k).MT_next(:,2)/df)+i-floor(FREQUENCY_LOW/df), ...
             tmpT*data(k).MT_next(:,1)+n))=true;
       end
     end
@@ -344,7 +344,7 @@ while ~eof
   %                (data(j).MT(:,2)>=(syls2(i).BoundingBox(2)*df+F_LOW)) & ...
   %                (data(j).MT(:,2)<=(sum(syls2(i).BoundingBox([2 4]))*df+F_LOW)));
         foo=[tmpT*data(j).MT(:,1)+floor(maxNFFT/minNFFT/2)+1+(CONVOLUTION_SIZE_PIX(2)-1)/2 ...
-             round(data(j).MT(:,2)/df)-floor(F_LOW/df)+floor(maxNFFT/minNFFT/2)+1];
+             round(data(j).MT(:,2)/df)-floor(FREQUENCY_LOW/df)+floor(maxNFFT/minNFFT/2)+1];
         [r c]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
         idx=ismember(foo,[c r],'rows');
         foo=data(j).MT(idx,1:4);
@@ -432,10 +432,10 @@ while ~eof
       freq_histogram={freq_histogram{idx}};
     end
 
-    %cull short syllables
-    if(MIN_LENGTH>0)
+    %cull short vocalizations
+    if(MINIMUM_VOCALIZATION_LENGTH>0)
       reshape([syls2.BoundingBox],4,length(syls2))';
-      idx=find(((ans(:,3)-CONVOLUTION_SIZE_PIX(2)+1)*minNFFT/2/FS)>MIN_LENGTH);
+      idx=find(((ans(:,3)-CONVOLUTION_SIZE_PIX(2)+1)*minNFFT/2/FS)>MINIMUM_VOCALIZATION_LENGTH);
       syls.NumObjects=length(idx);
       syls.PixelIdxList={syls.PixelIdxList{idx}};
       syls2=regionprops(syls,'basic');
@@ -451,7 +451,7 @@ while ~eof
     skytruth=[skytruth; ...
         ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1))*minNFFT/2/FS ...
         zeros(size(tmp,1),1) ...
-        [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+F_LOW];
+        [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+FREQUENCY_LOW];
     freq_contours={freq_contours{:} freq_contour{:}};
     freq_contours2={freq_contours2{:} freq_contour2{:}};
     freq_histograms={freq_histograms{:} freq_histogram{:}};
@@ -495,7 +495,7 @@ while ~eof
       c=c-(CONVOLUTION_SIZE_PIX(2)-1)/2+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1);
       c=c-floor(maxNFFT/minNFFT/2)-1;
       r=r-floor(maxNFFT/minNFFT/2)-1;
-      plot(c.*(minNFFT/2)./FS,r.*df+F_LOW,'bo');
+      plot(c.*(minNFFT/2)./FS,r.*df+FREQUENCY_LOW,'bo');
 
       for i=1:length(syls2)
         for j=1:length(freq_contours{end-i+1})
@@ -511,7 +511,7 @@ while ~eof
                  ((groundtruth(:,2)>=left) & (groundtruth(:,2)<=right)));
         if(~isempty(idx))
           line(groundtruth(idx,[1 2 2 1 1]),...
-              [F_LOW F_LOW F_HIGH F_HIGH F_LOW],'color',[0 1 0]);
+              [FREQUENCY_LOW FREQUENCY_LOW FREQUENCY_HIGH FREQUENCY_HIGH FREQUENCY_LOW],'color',[0 1 0]);
         end
       end
 
@@ -522,11 +522,11 @@ while ~eof
       %     repmat([F_LOW; F_HIGH],1,length(chunk_splits)),'c');
 
       axis tight;
-      v=axis;  axis([v(1) v(2) F_LOW F_HIGH]);
+      v=axis;  axis([v(1) v(2) FREQUENCY_LOW FREQUENCY_HIGH]);
       xlabel('time (s)');
       ylabel('frequency (Hz)');
 
-      [b,a]=butter(4,F_LOW/(FS/2),'high');
+      [b,a]=butter(4,FREQUENCY_LOW/(FS/2),'high');
 
       % plot hits, misses and false alarms separately
       if(~GROUNDTRUTH)
@@ -571,13 +571,13 @@ end
 
 %dump files
 if(GROUNDTRUTH)
-  disp([num2str(num) ': ' num2str(size(groundtruth,1)) ' manually segmented syllables, ' num2str(length(misses)) ...
+  disp([num2str(num) ': ' num2str(size(groundtruth,1)) ' manually segmented vocalizations, ' num2str(length(misses)) ...
       ' (' num2str(100*length(misses)/size(groundtruth,1),3) '%) of which are missed']);
 
-  disp([num2str(num) ': ' num2str(size(skytruth,1)) ' automatically segmented syllables, ' num2str(length(false_alarms)) ...
+  disp([num2str(num) ': ' num2str(size(skytruth,1)) ' automatically segmented vocalizations, ' num2str(length(false_alarms)) ...
       ' (' num2str(100*length(false_alarms)/size(skytruth,1),3) '%) of which are false alarms']);
 else
-  disp([num2str(num) ': ' num2str(size(skytruth,1)) ' automatically segmented syllables']);
+  disp([num2str(num) ': ' num2str(size(skytruth,1)) ' automatically segmented vocalizations']);
 end
 
 tmp=[skytruth(:,1:2) skytruth(:,4:5)];
@@ -602,15 +602,15 @@ for i=1:length(data)
   end
   fprintf(fid,'\n');
 end
-fprintf(fid,'%s=%g;\n',varname(F_LOW),F_LOW);
-fprintf(fid,'%s=%g;\n',varname(F_HIGH),F_HIGH);
-fprintf(fid,'%s=[%g %g];  %%[%d %d] pixels\n',varname(CONVOLUTION_SIZE),CONVOLUTION_SIZE,CONVOLUTION_SIZE_PIX);
-fprintf(fid,'%s=%g;  %%%d pixels\n',varname(MINIMUM_OBJECT_AREA),MINIMUM_OBJECT_AREA,MINIMUM_OBJECT_AREA_PIX);
+fprintf(fid,'%s=%g;\n',varname(FREQUENCY_LOW),FREQUENCY_LOW);
+fprintf(fid,'%s=%g;\n',varname(FREQUENCY_HIGH),FREQUENCY_HIGH);
+fprintf(fid,'%s=[%g %g];\n',varname(CONVOLUTION_SIZE),CONVOLUTION_SIZE);
+fprintf(fid,'%s=%g;\n',varname(MINIMUM_OBJECT_AREA),MINIMUM_OBJECT_AREA);
 fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS),MERGE_HARMONICS);
 fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS_OVERLAP),MERGE_HARMONICS_OVERLAP);
 fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS_RATIO),MERGE_HARMONICS_RATIO);
 fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS_FRACTION),MERGE_HARMONICS_FRACTION);
-fprintf(fid,'%s=%g;\n',varname(MIN_LENGTH),MIN_LENGTH);
+fprintf(fid,'%s=%g;\n',varname(MINIMUM_VOCALIZATION_LENGTH),MINIMUM_VOCALIZATION_LENGTH);
 fprintf(fid,'%s=[%s];\n',varname(CHANNELS),num2str(CHANNELS));
 fclose(fid);
 

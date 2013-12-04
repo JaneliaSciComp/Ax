@@ -5,12 +5,12 @@ K=43;
 PVAL=0.01;
 
 channels=[1, 2, 4];
-f_low=20e3;
-f_high=120e3;
+frequency_low=20e3;
+frequency_high=120e3;
 convolution_size=[1300, 0.001];
 minimum_object_area=18.75;
 merge_harmonics=0;
 merge_harmonics_overlap=0.9;
 merge_harmonics_ratio=0.1;
 merge_harmonics_fraction=0.9;
-min_length=0;
+minimum_vocalization_length=0;
