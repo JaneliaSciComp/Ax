@@ -5,11 +5,11 @@
 #cd to ax/
 #./compile.sh
 
-#hard-coded for matlab 2013a on janelia cluster
+#hard-coded for matlab 2013b on janelia cluster
 
 mkdir -p ax1
 
-/usr/local/matlab-2013a/bin/mcc -o ax1 \
+/usr/local/matlab-2013b/bin/mcc -o ax1 \
   -W main:ax1 \
   -T link:exe \
   -d ax1 \
@@ -22,7 +22,7 @@ mkdir -p ax1
 
 mkdir -p ax2
 
-/usr/local/matlab-2013a/bin/mcc -o ax2 \
+/usr/local/matlab-2013b/bin/mcc -o ax2 \
   -R -singleCompThread \
   -W main:ax2 \
   -T link:exe \
