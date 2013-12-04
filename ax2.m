@@ -1,4 +1,4 @@
-% function ax2(f_low, f_high, conv_size, obj_size, ...
+% function ax2(f_low, f_high, convolution_size, minimum_object_area, ...
 %     merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
 %     min_length, ...
 %     channels, data_path)
@@ -16,8 +16,8 @@
 %
 % input arguments:
 %   f_low, f_high are in Hz
-%   conv_size is [height_freq width_time] in pixels, each must be odd
-%   obj_size is in pixels
+%   convolution_size is [frequency time] in Hz and sec
+%   minimum_object_area is in Hz-sec
 %   set merge_harmonics to 1 to collapse harmonically related syllables, 0 otherwise
 %     merge_harmonics_overlap is the fraction in time two segments must overlap
 %     merge_harmonics_ratio is the tolerance in frequency ratio two segments must be within
@@ -66,8 +66,8 @@ switch nargin
   case 11
     f_low=varargin{1};
     f_high=varargin{2};
-    conv_size=varargin{3};
-    obj_size=varargin{4};
+    convolution_size=varargin{3};
+    minimum_object_area=varargin{4};
     merge_harmonics=varargin{5};
     merge_harmonics_overlap=varargin{6};
     merge_harmonics_ratio=varargin{7};
@@ -83,13 +83,12 @@ if(isempty(f_low) || isempty(f_high) || (f_low<0) || (f_high<0) || (f_low>=f_hig
   error('f_low should be less than f_high and both should be non-negative real numbers');
 end
 
-if(isempty(conv_size) || (length(conv_size)~=2) || ...
-      (sum(~mod(conv_size,2))~=0) || (sum(conv_size<0)>0) || (sum(conv_size~=round(conv_size))>0))
-  error('conv_size should be a 2-vector of odd positive integers');
+if(isempty(convolution_size) || (length(convolution_size)~=2))
+  error('convolution_size should be a 2-vector');
 end
 
-if(isempty(obj_size) || (obj_size<0) || (obj_size~=round(obj_size)))
-  error('obj_size should be a non-negative integer');
+if(isempty(minimum_object_area) || (minimum_object_area<0))
+  error('minimum_object_area should be a non-negative integer');
 end
 
 if (isempty(merge_harmonics) || ((merge_harmonics~=0) && (merge_harmonics~=1)))
@@ -132,7 +131,7 @@ if(~isempty(tmp))
   end
   parfor i=1:length(datafiles)
 %   for i=1:length(datafiles)
-    ax2_guts(i, f_low, f_high, conv_size, obj_size, ...
+    ax2_guts(i, f_low, f_high, convolution_size, minimum_object_area, ...
         merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
         min_length, channels, fullfile(data_path, datafiles{i}));
   end
@@ -146,7 +145,7 @@ if(~isempty(tmp))
 else
   tmp=dir([data_path '*.ax']);
   if(~isempty(tmp))
-    ax2_guts(0, f_low, f_high, conv_size, obj_size, ...
+    ax2_guts(0, f_low, f_high, convolution_size, minimum_object_area, ...
         merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
         min_length, channels, data_path);
   else
@@ -155,7 +154,7 @@ else
 end
 
 
-function ax2_guts(num, F_LOW, F_HIGH, CONV_SIZE, OBJ_SIZE, ...
+function ax2_guts(num, F_LOW, F_HIGH, CONVOLUTION_SIZE, MINIMUM_OBJECT_AREA, ...
     MERGE_HARMONICS, MERGE_HARMONICS_OVERLAP, MERGE_HARMONICS_RATIO, MERGE_HARMONICS_FRACTION, ...
     MIN_LENGTH, CHANNELS, filename)
 
@@ -214,6 +213,9 @@ hit_num=1;
 miss_num=1;
 fa_num=1;
 CHUNK_FILE=1024;
+CONVOLUTION_SIZE_PIX=round(CONVOLUTION_SIZE ./ [df minNFFT/FS/2]);
+CONVOLUTION_SIZE_PIX=round(2*(0.5+floor(CONVOLUTION_SIZE_PIX/2)));  % ceil to odd
+MINIMUM_OBJECT_AREA_PIX=MINIMUM_OBJECT_AREA/df/(minNFFT/FS/2);
 
 [p,n,e]=fileparts(filename);
 directory=fullfile(p,[n '-out' datestr(now,30)]);
@@ -282,8 +284,8 @@ while ~eof
   end
 
   %convolve
-  im_next=[zeros(sizeF,(CONV_SIZE(2)-1)/2) im_next zeros(sizeF,(CONV_SIZE(2)-1)/2)];
-  im_next=logical(conv2(single(im_next),ones(CONV_SIZE),'same'));
+  im_next=[zeros(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2) im_next zeros(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2)];
+  im_next=logical(conv2(single(im_next),ones(CONVOLUTION_SIZE_PIX),'same'));
 
   %segment
   syls_next=bwconncomp(im_next,8);
@@ -297,11 +299,11 @@ while ~eof
       flag=0;
       for i=1:syls.NumObjects
         [ri ci]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
-        if(sum(ci>=(syls.ImageSize(2)-(CONV_SIZE(2)-1)/2))==0) continue;  end
+        if(sum(ci>=(syls.ImageSize(2)-(CONVOLUTION_SIZE_PIX(2)-1)/2))==0) continue;  end
         j=1;
         while j<=syls_next.NumObjects
           [rj cj]=ind2sub(syls_next.ImageSize,syls_next.PixelIdxList{j});
-          if(sum(cj<=((CONV_SIZE(2)-1)/2))==0)  j=j+1;  continue;  end
+          if(sum(cj<=((CONVOLUTION_SIZE_PIX(2)-1)/2))==0)  j=j+1;  continue;  end
           %if((max(ri) < (min(rj)-1)) || (max(rj) < (min(ri)-1)))  j=j+1;  continue;  end
           %cj=cj+chunk_splits(k+1)-chunk_splits(k);
           cj=cj+CHUNK_TIME_WINDOWS(1);
@@ -323,7 +325,7 @@ while ~eof
 
     %throwout out small blobs
     syls2=regionprops(syls,'basic');
-    tmp=find([syls2.Area]>OBJ_SIZE);
+    tmp=find([syls2.Area]>MINIMUM_OBJECT_AREA_PIX);
     syls2=syls2(tmp);
     syls.PixelIdxList=syls.PixelIdxList(tmp);
     syls.NumObjects=length(tmp);
@@ -341,7 +343,7 @@ while ~eof
   %               ((tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2+floor(tmpT/2))<=sum(syls2(i).BoundingBox([1 3]))) & ...
   %                (data(j).MT(:,2)>=(syls2(i).BoundingBox(2)*df+F_LOW)) & ...
   %                (data(j).MT(:,2)<=(sum(syls2(i).BoundingBox([2 4]))*df+F_LOW)));
-        foo=[tmpT*data(j).MT(:,1)+floor(maxNFFT/minNFFT/2)+1+(CONV_SIZE(2)-1)/2 ...
+        foo=[tmpT*data(j).MT(:,1)+floor(maxNFFT/minNFFT/2)+1+(CONVOLUTION_SIZE_PIX(2)-1)/2 ...
              round(data(j).MT(:,2)/df)-floor(F_LOW/df)+floor(maxNFFT/minNFFT/2)+1];
         [r c]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
         idx=ismember(foo,[c r],'rows');
@@ -433,7 +435,7 @@ while ~eof
     %cull short syllables
     if(MIN_LENGTH>0)
       reshape([syls2.BoundingBox],4,length(syls2))';
-      idx=find(((ans(:,3)-CONV_SIZE(2)+1)*minNFFT/2/FS)>MIN_LENGTH);
+      idx=find(((ans(:,3)-CONVOLUTION_SIZE_PIX(2)+1)*minNFFT/2/FS)>MIN_LENGTH);
       syls.NumObjects=length(idx);
       syls.PixelIdxList={syls.PixelIdxList{idx}};
       syls2=regionprops(syls,'basic');
@@ -445,7 +447,7 @@ while ~eof
     %tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
     tmp(:,1)=tmp(:,1)-floor(maxNFFT/minNFFT/2)-1;
     tmp(:,2)=tmp(:,2)-floor(maxNFFT/minNFFT/2)-1;
-    tmp(:,3)=tmp(:,3)-CONV_SIZE(2)+1;
+    tmp(:,3)=tmp(:,3)-CONVOLUTION_SIZE_PIX(2)+1;
     skytruth=[skytruth; ...
         ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1))*minNFFT/2/FS ...
         zeros(size(tmp,1),1) ...
@@ -490,7 +492,7 @@ while ~eof
       clf;  hold on;
 
       [r,c]=ind2sub(syls.ImageSize,cat(1,syls.PixelIdxList{:}));
-      c=c-(CONV_SIZE(2)-1)/2+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1);
+      c=c-(CONVOLUTION_SIZE_PIX(2)-1)/2+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1);
       c=c-floor(maxNFFT/minNFFT/2)-1;
       r=r-floor(maxNFFT/minNFFT/2)-1;
       plot(c.*(minNFFT/2)./FS,r.*df+F_LOW,'bo');
@@ -602,8 +604,8 @@ for i=1:length(data)
 end
 fprintf(fid,'%s=%g;\n',varname(F_LOW),F_LOW);
 fprintf(fid,'%s=%g;\n',varname(F_HIGH),F_HIGH);
-fprintf(fid,'%s=[%g %g];\n',varname(CONV_SIZE),CONV_SIZE);
-fprintf(fid,'%s=%g;\n',varname(OBJ_SIZE),OBJ_SIZE);
+fprintf(fid,'%s=[%g %g];  %%[%d %d] pixels\n',varname(CONVOLUTION_SIZE),CONVOLUTION_SIZE,CONVOLUTION_SIZE_PIX);
+fprintf(fid,'%s=%g;  %%%d pixels\n',varname(MINIMUM_OBJECT_AREA),MINIMUM_OBJECT_AREA,MINIMUM_OBJECT_AREA_PIX);
 fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS),MERGE_HARMONICS);
 fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS_OVERLAP),MERGE_HARMONICS_OVERLAP);
 fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS_RATIO),MERGE_HARMONICS_RATIO);
