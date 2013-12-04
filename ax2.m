@@ -23,7 +23,7 @@
 %     merge_harmonics_ratio is the tolerance in frequency ratio two segments must be within
 %     merge_harmonics_fraction is the fraction of the overlap that must be within the ratio tolerance
 %   minimum_vocalization_length is the minimum vocalization length in sec
-%   channels is a vector of which channels to use, or [] to use all of them (except 5 of course)
+%   channels is a vector of which channels to use, or [] to use all of them
 %   data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
 %
 % four files are output:
@@ -161,7 +161,6 @@ function ax2_guts(num, FREQUENCY_LOW, FREQUENCY_HIGH, CONVOLUTION_SIZE, MINIMUM_
 GROUNDTRUTH=0;
 SAVE_WAV=0;
 SAVE_PNG=0;
-% if(isempty(CHANNELS))  CHANNELS=[1:4 6:8];  end
 
 if(SAVE_WAV || SAVE_PNG)
   figure;
