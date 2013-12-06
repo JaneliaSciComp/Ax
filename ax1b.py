@@ -8,6 +8,7 @@ import os
 #import pdb
 import math
 from scipy import stats
+import scipy.io.wavfile as wavfile
 from dpss import dpss
 
 def nextpow2(i):
@@ -108,10 +109,12 @@ def do_it(params):
   PVAL = params[5]
   FS = params[6]
   NFFT = params[7]
-  CHUNK = params[8]
+  NWINDOWS_PER_WORKER = params[8]
   tapers = params[9]
-  offset = params[10]
-  offset2 = params[11]
+  worker = params[10]
+  t_offset_tic = params[11]
+  FILE_TYPE = params[12]
+  FILE_LEN_TIC = params[13]
 
   NCHANNELS = len(FILEINs)
   sig=stats.f.ppf((1-PVAL/NFFT),2,2*K-2)
@@ -123,20 +126,28 @@ def do_it(params):
   fft_out2 = pyfftw.n_byte_align_empty(NFFT//2+1, 16, 'complex64')
   fft_plan2 = pyfftw.FFTW(fft_in2, fft_out2, flags=('FFTW_PATIENT',))
 
-  NSAMPLES = NFFT//2*(CHUNK+1)
+  NSAMPLES = NFFT//2*(NWINDOWS_PER_WORKER+1)
   dd = np.empty([NSAMPLES, NCHANNELS], dtype=np.float32)
   for i in range(0,NCHANNELS):
-    fid=open(os.path.join(DIROUT,FILEINs[i]),'rb')
-    fid.seek(((t_now+offset*CHUNK)*(NFFT//2)+offset2)*4,0);
-    tmp = fid.read(NSAMPLES*4)
-    tmp = np.array(struct.unpack(str(int(len(tmp)/4))+'f', tmp), dtype=np.float32)
-    if (len(tmp) < NSAMPLES):
+    tmp=np.empty(0)
+    tmp2=(t_now+worker*NWINDOWS_PER_WORKER)*(NFFT//2)+t_offset_tic
+    filei=os.path.join(DIROUT,FILEINs[i])
+    if tmp2<FILE_LEN_TIC:
+      if FILE_TYPE==1:
+        fid=open(filei,'rb')
+        fid.seek(tmp2*4,0);
+        tmp = fid.read(NSAMPLES*4)
+        fid.close()
+        tmp = np.array(struct.unpack(str(int(len(tmp)/4))+'f', tmp), dtype=np.float32)
+      if FILE_TYPE==2:
+        rate, fid = wavfile.read(filei,mmap=True)
+        tmp=fid[(tmp2+1):min(tmp2+NSAMPLES, FILE_LEN_TIC)]
+    if len(tmp) < NSAMPLES:
       tmp = np.concatenate((tmp, np.zeros(NSAMPLES-len(tmp), dtype=np.float32)))
     dd[:,i] = tmp
-    fid.close()
 
   idx=list()
-  for j in range(0,CHUNK):
+  for j in range(0,NWINDOWS_PER_WORKER):
     ddd=dd[np.array(range(0,NFFT))+j*NFFT//2,:]
     #F, A, f, sig, sd = ftest(ddd, tapers, FS, PVAL, fft_in, fft_out, fft_plan)
     F = ftest(ddd, tapers, PVAL, fft_in, fft_out, fft_plan)
@@ -144,5 +155,5 @@ def do_it(params):
       tmp=[i+1 for (i,v) in enumerate(F[1:-1,l]) if v>sig]
       for m in range(0,len(tmp)):
         freq,amp = brown_puckette(ddd[:,l],tmp[m],FS, fft_in2, fft_out2, fft_plan2)
-        idx.append((j+offset*CHUNK, freq, amp, l))
+        idx.append((j+worker*NWINDOWS_PER_WORKER, freq, amp, l))
   return idx

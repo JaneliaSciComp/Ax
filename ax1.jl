@@ -1,9 +1,9 @@
 #!/home/arthurb/src/julia/julia
 
-# python ax1.py params_file FILEIN FILEOUT
-# python ax1.py params_file FILEIN FILEOUT START STOP
-# python ax1.py FS NFFT NW K PVAL FILEIN FILEOUT
-# python ax1.py FS NFFT NW K PVAL FILEIN FILEOUT START STOP
+# julia -p NWORKERS ax1.jl params_file FILEIN FILEOUT
+# julia -p NWORKERS ax1.jl params_file FILEIN FILEOUT START STOP
+# julia -p NWORKERS ax1.jl FS NFFT NW K PVAL FILEIN FILEOUT
+# julia -p NWORKERS ax1.jl FS NFFT NW K PVAL FILEIN FILEOUT START STOP
 #
 # analyze a set of time series with multi-taper spectral analysis and
 # create a sparse matrix of just the time-frequency pixels whose F-test
@@ -19,19 +19,22 @@
 # NW: multi-taper time-bandwidth product
 # K: number of tapers
 # PVAL: F-test p-val threshold
-# FILEIN: the base filename and path of .ch[0-9] files containing arrays of float32
+# FILEIN: the base filename and path of [0-9].wav files with a single channel each,
+#     or .ch[0-9] files containing arrays of float32
 # FILEOUT: an integer to append to FILEIN to differentiate parameter sets used
 # START,STOP: optional time range, in seconds
 #
-# output is a binary file with a time x frequency x amplitude x channel array of hot pixels
+# output is a binary file with a time x frequency x amplitude x channel
+#     array of hot pixels
 #
-# python ax1.py 'ultrasonic_params' 'urine' '1'
-# python ax1.py 200e3 0.001 15 29 0.01 'urine' '1'
-# python ax1.py 450450 0.001 15 29 0.01 0 30 'groundtruth' '1'
+# julia -p 12 ax1.jl 'ultrasonic_params' 'urine' '1'
+# julia -p 12 ax1.jl 200e3 0.001 15 29 0.01 'urine' '1'
+# julia -p 12 ax1.jl 450450 0.001 15 29 0.01 0 30 'groundtruth' '1'
 
 require("ax1b.jl")
-require("/home/arthurb/src/FrequencyDomainAnalysis.jl/src/windows.jl")
 using MAT
+using DSP
+using WAV
 #using Debug
 #using Profile
 
@@ -91,7 +94,7 @@ function main(ARGS)
 
   NFFT=nextpow2(int(NFFT*FS))  # convert to ticks
 
-  CHUNK=int(12*256*1000/NFFT)  # NFFT/2 ticks
+  NWINDOWS_PER_WORKER=int(12*256*1000/NFFT)  # NFFT/2 ticks
 
   FIRST_MT=NaN
   LAST_MT=NaN
@@ -106,44 +109,60 @@ function main(ARGS)
   tmp = readall(`ls $DIROUT`)
   tmp = split(tmp,"\n")
   tmp2 = map((x) -> ismatch(Regex("$BASEIN.ch[0-9]"),x), tmp)
-  FILEINs=tmp[tmp2]
-
-  NCHANNELS=length(FILEINs)
-  if NCHANNELS==0
-    print(["can't find file '$FILEIN.ch*'"])
-    return
+  FILE_TYPE=1
+  if !any(tmp2)
+    tmp2 = map((x) -> ismatch(Regex("$BASEIN[0-9].wav"),x), tmp)
+    FILE_TYPE=2
+    if !any(tmp2)
+      print(["can't find any .wave or .ch files with basenmae '$FILEIN'"])
+      return
+    end
   end
+  FILEINs=tmp[tmp2]
+  NCHANNELS=length(FILEINs)
 
   REMAP={}
   local FILE_LEN
   local t_now_sec
-  local t_now_offset
+  local t_offset_tic
   for i = 1:NCHANNELS
-    tmp = string(DIROUT,"/",FILEINs[i])
-    local fid
-    try
-      fid = open(tmp,"r")
-    catch
-      print("can't open file '$tmp'")
-      return
+    filei = string(DIROUT,"/",FILEINs[i])
+    if FILE_TYPE==1
+      local fid
+      try
+        fid = open(filei,"r")
+      catch
+        print("can't open file '$filei'")
+        return
+      end
+      seekend(fid)
+      FILE_LEN=position(fid)/4/FS
+      close(fid)
+      push!(REMAP,float(string(FILEINs[i][end])))
     end
-    seekend(fid)
-    FILE_LEN=position(fid)/4/FS
+    if FILE_TYPE==2
+      try
+        FILE_LEN, foo = wavread(filei,format="size")
+      catch
+        print("can't open file '$filei'")
+        return
+      end
+      FILE_LEN /= FS
+      push!(REMAP,float(string(FILEINs[i][end-4])))
+    end
     if !isdefined(Main,:START)
       tmp=int(FILE_LEN*FS/(NFFT>>1)-1)
       @printf("Processing %f min = %d windows = %f chunks of data in %s\n",
-          FILE_LEN/60, tmp, tmp/CHUNK, FILEINs[i])
-      t_now_offset=0;
+          FILE_LEN/60, tmp, tmp/NWINDOWS_PER_WORKER, FILEINs[i])
+      t_offset_tic=0;
       t_now_sec=0;
     else
       tmp=int((STOP-START)*FS/(NFFT>>1)-1)
       @printf("Processing %f min = %d windows = %f chunks of data in %s\n",
-          (STOP-START)/60, tmp, tmp/CHUNK, FILEINs[i])
-      t_now_offset=int(START*FS);
+          (STOP-START)/60, tmp, tmp/NWINDOWS_PER_WORKER, FILEINs[i])
+      t_offset_tic=int(START*FS);
       t_now_sec=START;
     end
-    push!(REMAP,float(string(FILEINs[i][end])))
-    close(fid)
   end
 
   fid_out=open("$FILEIN-$FILEOUT.ax","w")
@@ -180,7 +199,7 @@ function main(ARGS)
     end
 
     idx = pmap(do_it,
-       [(DIROUT, FILEINs, t_now, NW, K, PVAL, FS, NFFT, CHUNK, tapers, x-1, t_now_offset) for x in 1:NWORKERS])
+       [(DIROUT, FILEINs, t_now, NW, K, PVAL, FS, NFFT, NWINDOWS_PER_WORKER, tapers, x-1, t_offset_tic, FILE_TYPE, int(round(FILE_LEN*FS))) for x in 1:NWORKERS])
 
     for i in idx
       for j in i
@@ -188,8 +207,8 @@ function main(ARGS)
       end
     end
 
-    t_now_sec = t_now_sec+float(NFFT>>1)/FS*NWORKERS*CHUNK
-    t_now = t_now+NWORKERS*CHUNK
+    t_now_sec = t_now_sec+float(NFFT>>1)/FS*NWORKERS*NWINDOWS_PER_WORKER
+    t_now = t_now+NWORKERS*NWINDOWS_PER_WORKER
   end
 
   write(fid_out,"Z")

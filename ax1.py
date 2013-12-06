@@ -1,4 +1,5 @@
-#!/usr/bin/python 
+#!/home/arthurb/bin/anaconda/bin/python
+
 # python ax1.py params_file FILEIN FILEOUT
 # python ax1.py params_file FILEIN FILEOUT START STOP
 # python ax1.py FS NFFT NW K PVAL FILEIN FILEOUT
@@ -18,13 +19,15 @@
 # NW: multi-taper time-bandwidth product
 # K: number of tapers
 # PVAL: F-test p-val threshold
-# FILEIN: the base filename and path of .ch[0-9] files containing arrays of float32
+# FILEIN: the base filename and path of [0-9].wav files with a single channel each,
+#     or .ch[0-9] files containing float32s
 # FILEOUT: an integer to append to FILEIN to differentiate parameter sets used
 # START,STOP: optional time range, in seconds
 #
-# output is a binary file with a time x frequency x amplitude x channel array of hot pixels
+# output is a binary file with a time x frequency x amplitude x channel
+#     array of hot pixels
 #
-# python ax1.py 'ultrasonic_params' 'urine' '1'
+# python ax1.py 'ultrasonic_params.txt' 'urine' '1'
 # python ax1.py 200e3 0.001 15 29 0.01 'urine' '1'
 # python ax1.py 450450 0.001 15 29 0.01 0 30 'groundtruth' '1'
 
@@ -43,6 +46,7 @@ import math
 from scipy import stats
 import pyfftw
 from dpss import dpss
+import wave
 
 if __name__ == "__main__":
 
@@ -54,7 +58,7 @@ if __name__ == "__main__":
   tstart=time.time()
 
   if (len(sys.argv)<8):
-    execfile(varargin[0])
+    execfile(sys.argv[1])
     FILEIN=sys.argv[2]
     FILEOUT=sys.argv[3]
   else:
@@ -94,7 +98,7 @@ if __name__ == "__main__":
 
   NFFT=int(nextpow2(NFFT*FS))  # convert to ticks
 
-  CHUNK=int(12*256*1000/NFFT)  # NFFT/2 ticks
+  NWINDOWS_PER_WORKER=int(12*256*1000/NFFT)  # NFFT/2 ticks
 
   FIRST_MT=float('nan')
   LAST_MT=float('nan')
@@ -109,34 +113,47 @@ if __name__ == "__main__":
 
   DIROUT=os.path.dirname(FILEIN);
   FILEINs=sorted(glob.glob(FILEIN+'.ch*'));
+  FILE_TYPE=1
+  if (len(FILEINs)==0):
+    FILEINs=sorted(glob.glob(FILEIN+'*.wav'));
+    FILE_TYPE=2
+    if (len(FILEINs)==0):
+      print(["can't find any .wav or .ch files with basename '"+FILEIN]);
+      exit
   NCHANNELS=len(FILEINs);
-  if (NCHANNELS==0):
-    print(["can't find file '"+FILEIN+".ch*'"]);
-    exit
 
   REMAP=list();
   for i in range(0,NCHANNELS):
-    try:
-      fid=open(os.path.join(DIROUT,FILEINs[i]),'rb')
-    except:
-      print(["can't open file '"+os.path.join(DIROUT,FILEINs[i])+"'"])
-      exit
-    fid.seek(0,2);
-    FILE_LEN=fid.tell()/4/FS;
+    filei=os.path.join(DIROUT,FILEINs[i])
+    if FILE_TYPE==1:
+      try:
+        fid=open(filei,'rb')
+      except:
+        print(["can't open file '"+filei+"'"])
+        exit
+      fid.seek(0,2);
+      FILE_LEN=fid.tell()/4/FS;
+      fid.close()
+      REMAP.append(FILEINs[i][-1]);
+    if FILE_TYPE==2:
+      try:
+        fid=wave.open(filei,'rb')
+      except:
+        print(["can't open file '"+filei+"'"])
+        exit
+      FILE_LEN=fid.getnframes()/FS
+      fid.close();
+      REMAP.append(FILEINs[i][-5]);
     if 'START' not in locals():
       tmp=FILE_LEN*FS/(NFFT//2)-1
-      print('Processing {:.3g} min = {:.3g} windows = {:3g} chunks of data in {:s}'.format(FILE_LEN/60, tmp, tmp/CHUNK, FILEINs[i]));
-      #fid[i].seek(0,0);
-      t_now_offset=0;
+      print('Processing {:.3g} min = {:.3g} windows = {:3g} chunks of data in {:s}'.format(FILE_LEN/60, tmp, tmp/NWINDOWS_PER_WORKER, FILEINs[i]));
+      t_offset_tic=0;
       t_now_sec=0;
     else:
       tmp=(STOP-START)*FS/(NFFT//2)-1
-      print('Processing {:.3g} min = {:.3g} windows = {:3g} chunks of data in {:s}'.format((STOP-START)/60, tmp, tmp/CHUNK, FILEINs[i]));
-      #fid[i].seek(round(START*FS)*4,0);
-      t_now_offset=round(START*FS);
+      print('Processing {:.3g} min = {:.3g} windows = {:3g} chunks of data in {:s}'.format((STOP-START)/60, tmp, tmp/NWINDOWS_PER_WORKER, FILEINs[i]));
+      t_offset_tic=round(START*FS);
       t_now_sec=START;
-    REMAP.append(FILEINs[i][-1]);
-    fid.close()
 
   fid_out=open(FILEIN+'-'+FILEOUT+'.ax','wb')
   # L=8 bytes on 64-bit systems
@@ -170,14 +187,14 @@ if __name__ == "__main__":
 
     #idx=map(do_it, \
     idx=pool.map(do_it, \
-       [(DIROUT, FILEINs, t_now, NW,K,PVAL,FS,NFFT, CHUNK, tapers, x, t_now_offset) for x in range(0,NWORKERS)])
+       [(DIROUT, FILEINs, t_now, NW,K,PVAL,FS,NFFT, NWINDOWS_PER_WORKER, tapers, x, t_offset_tic, FILE_TYPE, round(FILE_LEN*FS)) for x in range(0,NWORKERS)])
     for i in idx:
       for j in i:
         fid_out.write(struct.pack('dddd', \
             float(t_now)+j[0], j[1], j[2], float(REMAP[j[3]])))
 
-    t_now_sec = t_now_sec+float(NFFT//2)/FS*NWORKERS*CHUNK
-    t_now = t_now+NWORKERS*CHUNK
+    t_now_sec = t_now_sec+float(NFFT//2)/FS*NWORKERS*NWINDOWS_PER_WORKER
+    t_now = t_now+NWORKERS*NWINDOWS_PER_WORKER
  
   fid_out.write('Z'.encode('ascii'))
   fid_out.close()

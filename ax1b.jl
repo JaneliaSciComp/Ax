@@ -1,4 +1,5 @@
 using MAT
+using WAV
 #using Debug
 #using Profile
 using Distributions
@@ -88,10 +89,12 @@ function do_it(params)
   PVAL = params[6]
   FS = params[7]
   NFFT = params[8]
-  CHUNK = params[9]
+  NWINDOWS_PER_WORKER = params[9]
   tapers = params[10]
-  offset = params[11]
-  offset2 = params[12]
+  worker = params[11]
+  t_worker_tic = params[12]
+  FILE_TYPE = params[13]
+  FILE_LEN_TIC = params[14]
 
   NCHANNELS = length(FILEINs)
   sig=invlogcdf(FDist(2,2*K-2),log(1-PVAL/NFFT))
@@ -104,12 +107,25 @@ function do_it(params)
   fft_plan2 = FFTW.Plan(fft_in2, fft_out2, 1, FFTW.PATIENT, FFTW.NO_TIMELIMIT)
 
   #dd[1:(NFFT>>1),:]=dd[(end-NFFT>>1+1):end,:]
-  NSAMPLES = (NFFT>>1)*(CHUNK+1);
+  NSAMPLES = (NFFT>>1)*(NWINDOWS_PER_WORKER+1);
   dd = Array(Float32, NSAMPLES, NCHANNELS)
   for i = 1:NCHANNELS
-    fid = open(string(DIROUT,"/",FILEINs[i]),"r")
-    seek(fid, ((t_now+offset*CHUNK)*(NFFT>>1)+offset2)*4)
-    tmp = read(fid, Float32, NSAMPLES)
+    tmp=[]
+    tmp2=(t_now+worker*NWINDOWS_PER_WORKER)*(NFFT>>1)+t_worker_tic
+    filei=string(DIROUT,"/",FILEINs[i])
+    if tmp2<FILE_LEN_TIC
+      if FILE_TYPE==1
+        fid = open(filei,"r")
+        seek(fid, tmp2*4)
+        tmp = read(fid, Float32, min(NSAMPLES, FILE_LEN_TIC-tmp2))
+        close(fid)
+      end
+      if FILE_TYPE==2
+        y, fs, nbits, extra = wavread(filei,
+            subrange=(tmp2+1):min(tmp2+NSAMPLES, FILE_LEN_TIC))
+        tmp=float32(y)
+      end
+    end
     if (length(tmp) < NSAMPLES)
       tmp = [tmp, zeros(Float32, NSAMPLES-length(tmp))]
     end
@@ -118,7 +134,7 @@ function do_it(params)
   end
 
   idx={}
-  for j = 1:CHUNK
+  for j = 1:NWINDOWS_PER_WORKER
     ddd=dd[[1:NFFT]+(j-1)*(NFFT>>1),:]
     #(F, A, f, sig, sd) = ftest(ddd, tapers, FS, PVAL, fft_in, fft_out, fft_plan)
     F = ftest(ddd, tapers, PVAL, fft_in, fft_out, fft_plan)
@@ -126,7 +142,7 @@ function do_it(params)
       tmp = 1 + find(F[2:end-1,l] .> sig)
       for m = 1:length(tmp)
         freq, amp = brown_puckette(ddd[:,l],tmp[m],FS, fft_in2, fft_out2, fft_plan2)
-        push!(idx, [float64(j)+offset*CHUNK, freq, amp, float64(l)])
+        push!(idx, [float64(j)+worker*NWINDOWS_PER_WORKER, freq, amp, float64(l)])
       end
     end
   end
