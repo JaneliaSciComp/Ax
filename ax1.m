@@ -177,8 +177,8 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
   end
 
   idx=cell(1,NWORKERS);
-%   parfor i=1:NWORKERS
-  for i=1:NWORKERS
+  parfor i=1:NWORKERS
+%   for i=1:NWORKERS
 
     NSAMPLES = NFFT/2*(NWINDOWS_PER_WORKER+1);
     dd = zeros(NCHANNELS, NSAMPLES, 'single');
@@ -208,7 +208,7 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
       ddd=dd(:,(1:NFFT)+NFFT/2*(j-1));
       F = ftestc(ddd',tapers,PVAL);
       for l=1:NCHANNELS
-        tmp=1+find(F(2:end,l)'>sig);
+        tmp=1+find(F(2:end-1,l)'>sig);
         for m=1:length(tmp)
           [freq,amp]=brown_puckette(ddd(l,:),tmp(m),FS);
           idx{i}{end+1} = [j+(i-1)*NWINDOWS_PER_WORKER, freq, amp, l];
