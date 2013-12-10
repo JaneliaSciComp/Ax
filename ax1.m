@@ -151,7 +151,8 @@ for i=1:length(FILEINs)
   else
     tmp=round((STOP-START)*FS/(NFFT/2)-1);
     disp(['Processing ' num2str((STOP-START)/60,3) ' min = ' num2str(tmp) ' windows = ' num2str(tmp/NWINDOWS_PER_WORKER,3) ' chunks of data in ' FILEINs(i).name]);
-    t_offset_tic = round(START*FS);
+    %t_offset_tic = round(START*FS);
+    t_offset_tic = round(START*FS/(NFFT/2))*(NFFT/2);
     t_now_sec=START;
   end
 end
@@ -176,8 +177,8 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
   end
 
   idx=cell(1,NWORKERS);
-  parfor i=1:NWORKERS
-%   for i=1:NWORKERS
+%   parfor i=1:NWORKERS
+  for i=1:NWORKERS
 
     NSAMPLES = NFFT/2*(NWINDOWS_PER_WORKER+1);
     dd = zeros(NCHANNELS, NSAMPLES, 'single');
