@@ -147,12 +147,14 @@ for i=1:length(FILEINs)
     tmp=round(FILE_LEN*FS/(NFFT/2)-1);
     disp(['Processing ' num2str(FILE_LEN/60,3) ' min = ' num2str(tmp) ' windows = ' num2str(tmp/NWINDOWS_PER_WORKER,3) ' chunks of data in ' FILEINs(i).name]);
     t_offset_tic = 0;
+    t_offset_window = 0;
     t_now_sec=0;
   else
     tmp=round((STOP-START)*FS/(NFFT/2)-1);
     disp(['Processing ' num2str((STOP-START)/60,3) ' min = ' num2str(tmp) ' windows = ' num2str(tmp/NWINDOWS_PER_WORKER,3) ' chunks of data in ' FILEINs(i).name]);
     %t_offset_tic = round(START*FS);
     t_offset_tic = round(START*FS/(NFFT/2))*(NFFT/2);
+    t_offset_window = round(START*FS/(NFFT/2));
     t_now_sec=START;
   end
 end
@@ -165,7 +167,7 @@ fwrite(fid_out,[PVAL df],'double');
 
 FILE_LEN_TIC=round(FILE_LEN*FS);
 
-t_now=0;
+t_now_window=0;
 tic;
 while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
   if(toc>10)
@@ -184,7 +186,7 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
     dd = zeros(NCHANNELS, NSAMPLES, 'single');
     for j=1:NCHANNELS
       tmp=[];  count=0;
-      tmp2=(t_now+(i-1)*NWINDOWS_PER_WORKER)*NFFT/2+t_offset_tic;
+      tmp2=(t_now_window+(i-1)*NWINDOWS_PER_WORKER)*NFFT/2+t_offset_tic;
       filej=fullfile(FILEPATH,FILEINs(j).name);
       if tmp2<FILE_LEN_TIC
         switch FILE_TYPE
@@ -218,12 +220,12 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
   end
   for i=idx
     for j=i{1}
-      fwrite(fid_out,[t_now+j{1}(1) j{1}(2:3) REMAP(j{1}(4))],'double');  % blegh
+      fwrite(fid_out,[t_now_window+t_offset_window+j{1}(1) j{1}(2:3) REMAP(j{1}(4))],'double');  % blegh
     end
   end
 
   t_now_sec=t_now_sec+NFFT/2/FS*NWORKERS*NWINDOWS_PER_WORKER;
-  t_now=t_now+NWORKERS*NWINDOWS_PER_WORKER;
+  t_now_window=t_now_window+NWORKERS*NWINDOWS_PER_WORKER;
 end
 
 fwrite(fid_out,'Z','uchar');
