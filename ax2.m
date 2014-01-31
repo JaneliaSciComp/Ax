@@ -1,8 +1,8 @@
-% function ax2(frequency_low, frequency_high, convolution_size, minimum_object_area, ...
+% function directory=ax2(frequency_low, frequency_high, convolution_size, minimum_object_area, ...
 %     merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
 %     minimum_vocalization_length, ...
 %     channels, data_path)
-% function ax2(params_file, data_path)
+% function directory=ax2(params_file, data_path)
 %
 % extract contours from a set of spectrograms by first convolving hot pixels
 % with a square box, then finding contiguous pixels, and finally discarding those
@@ -45,7 +45,7 @@
 %     1:4, '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 % ax2('rejection_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 
-function ax2(varargin)
+function directory=ax2(varargin)
 
 switch nargin
   case 2
@@ -129,6 +129,7 @@ if(~isempty(tmp))
       end
     end
   end
+  directory=[];
   parfor i=1:length(datafiles)
 %   for i=1:length(datafiles)
     ax2_guts(i, frequency_low, frequency_high, convolution_size, minimum_object_area, ...
@@ -145,7 +146,7 @@ if(~isempty(tmp))
 else
   tmp=dir([data_path '*.ax']);
   if(~isempty(tmp))
-    ax2_guts(0, frequency_low, frequency_high, convolution_size, minimum_object_area, ...
+    directory=ax2_guts(0, frequency_low, frequency_high, convolution_size, minimum_object_area, ...
         merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
         minimum_vocalization_length, channels, data_path);
   else
@@ -154,11 +155,10 @@ else
 end
 
 
-function ax2_guts(num, FREQUENCY_LOW, FREQUENCY_HIGH, CONVOLUTION_SIZE, MINIMUM_OBJECT_AREA, ...
+function directory=ax2_guts(num, FREQUENCY_LOW, FREQUENCY_HIGH, CONVOLUTION_SIZE, MINIMUM_OBJECT_AREA, ...
     MERGE_HARMONICS, MERGE_HARMONICS_OVERLAP, MERGE_HARMONICS_RATIO, MERGE_HARMONICS_FRACTION, ...
     MINIMUM_VOCALIZATION_LENGTH, CHANNELS, filename)
 
-GROUNDTRUTH=0;
 SAVE_WAV=0;
 SAVE_PNG=0;
 
@@ -220,19 +220,6 @@ MINIMUM_OBJECT_AREA_PIX=MINIMUM_OBJECT_AREA/df/(minNFFT/FS/2);
 directory=fullfile(p,[n '-out' datestr(now,30)]);
 mkdir(directory);
 
-if(GROUNDTRUTH)
-  groundtruth=load([filename '.gnd']);
-  groundtruth=groundtruth(:,2:3);
-  groundtruth=sortrows(groundtruth,1);
-  groundtruth=groundtruth./FS;
-  idx=find(groundtruth(:,1)>groundtruth(:,2));
-  if(~isempty(idx))
-    error(['rows ' num2str(idx) ' of groundtruth are invalid.']);
-  end
-  groundtruth(:,3)=0;
-  sidx=1;  gidx=1;
-end
-
 tic;
 eof=false;  count=4*CHUNK_FILE;
 chunk_curr=1;
@@ -265,29 +252,36 @@ while ~eof
 
   sizeF=ceil(FREQUENCY_HIGH/df)-floor(FREQUENCY_LOW/df)+2*floor(maxNFFT/minNFFT/2)+1;
   sizeT=CHUNK_TIME_WINDOWS(1)+2*floor(maxNFFT/minNFFT/2)+1;
-  im_next=false(sizeF,sizeT);
+  %skip this chunk if no hot pixels
+  if(~all(arrayfun(@(x) isempty(x.MT_next), data)))
+    im_next=false(sizeF,sizeT);
 
-
-  %collapse across channels and window sizes
-  for k=1:length(data)
-    if(isempty(data(k).MT_next))  continue;  end
-    tmpT=data(k).NFFT/minNFFT;
-    tmpF=maxNFFT/data(k).NFFT;
-    for i=(-floor(tmpF/2):floor(tmpF/2))+floor(maxNFFT/minNFFT/2)+1
-      for n=(-floor(tmpT/2):floor(tmpT/2))+floor(maxNFFT/minNFFT/2)+1
-        im_next(sub2ind([sizeF,sizeT],...
-            round(data(k).MT_next(:,2)/df)+i-floor(FREQUENCY_LOW/df), ...
-            tmpT*data(k).MT_next(:,1)+n))=true;
+    %collapse across channels and window sizes
+    for k=1:length(data)
+      if(isempty(data(k).MT_next))  continue;  end
+      tmpT=data(k).NFFT/minNFFT;
+      tmpF=maxNFFT/data(k).NFFT;
+      for i=(-floor(tmpF/2):floor(tmpF/2))+floor(maxNFFT/minNFFT/2)+1
+        for n=(-floor(tmpT/2):floor(tmpT/2))+floor(maxNFFT/minNFFT/2)+1
+          im_next(sub2ind([sizeF,sizeT],...
+              round(data(k).MT_next(:,2)/df)+i-floor(FREQUENCY_LOW/df), ...
+              tmpT*data(k).MT_next(:,1)+n))=true;
+        end
       end
     end
+
+    %convolve
+    im_next=[zeros(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2) im_next zeros(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2)];
+    im_next=logical(conv2(single(im_next),ones(CONVOLUTION_SIZE_PIX),'same'));
+
+    %segment
+    syls_next=bwconncomp(im_next,8);
+  else
+    syls_next.Connectivity=0;
+    syls_next.ImageSize=[sizeF sizeT];
+    syls_next.NumObjects=0;
+    syls_next.PixelIdxList={};
   end
-
-  %convolve
-  im_next=[zeros(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2) im_next zeros(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2)];
-  im_next=logical(conv2(single(im_next),ones(CONVOLUTION_SIZE_PIX),'same'));
-
-  %segment
-  syls_next=bwconncomp(im_next,8);
 
   % skip to 2nd chunk if currently on first
   if(exist('syls'))
@@ -455,37 +449,6 @@ while ~eof
     freq_contours2={freq_contours2{:} freq_contour2{:}};
     freq_histograms={freq_histograms{:} freq_histogram{:}};
 
-    %compare to ground truth
-    if(GROUNDTRUTH)
-      while((sidx<=size(skytruth,1))&&(skytruth(sidx,2)<groundtruth(gidx,1)))
-        sidx=sidx+1;
-      end
-      while((sidx<=size(skytruth,1)) && (gidx<=size(groundtruth,1)))
-        if(skytruth(sidx,1)<groundtruth(gidx,2))
-          groundtruth(gidx,3)=sidx;
-          skytruth(sidx,3)=gidx;
-          sidx=sidx+1;
-        end
-        if(sidx>size(skytruth,1))  break;  end
-        if(skytruth(sidx,1)>groundtruth(gidx,2))
-          gidx=gidx+1;
-          if(gidx>size(groundtruth,1))  break;  end
-        end
-        while((sidx<size(skytruth,1))&&(skytruth(sidx,2)<groundtruth(gidx,1)))
-          sidx=sidx+1;
-        end
-      end
-      if ~eof
-        misses=find(groundtruth(1:min([gidx-1 size(groundtruth,1)]),3)==0);
-        false_alarms=find(skytruth(:,3)==0);
-        hits=setdiff(1:min([gidx-1 size(groundtruth,1)]),misses);
-      else
-        misses=find(groundtruth(1:size(groundtruth,1),3)==0);
-        false_alarms=find(skytruth(:,3)==0);
-        hits=setdiff(1:size(groundtruth,1),misses);
-      end
-    end
-
     %plot
     if(SAVE_WAV || SAVE_PNG)
       clf;  hold on;
@@ -503,17 +466,6 @@ while ~eof
         end
       end
 
-      if(GROUNDTRUTH)
-        left =(chunk_curr-2)*CHUNK_TIME_WINDOWS(end)*maxNFFT/2/FS;
-        right=(chunk_curr-1)*CHUNK_TIME_WINDOWS(end)*maxNFFT/2/FS;
-        idx=find(((groundtruth(:,1)>=left) & (groundtruth(:,1)<=right)) | ...
-                 ((groundtruth(:,2)>=left) & (groundtruth(:,2)<=right)));
-        if(~isempty(idx))
-          line(groundtruth(idx,[1 2 2 1 1]),...
-              [FREQUENCY_LOW FREQUENCY_LOW FREQUENCY_HIGH FREQUENCY_HIGH FREQUENCY_LOW],'color',[0 1 0]);
-        end
-      end
-
       plot(skytruth((end-length(syls2)+1):end,[1 2 2 1 1])',...
            skytruth((end-length(syls2)+1):end,[4 4 5 5 4])','y');
 
@@ -528,68 +480,31 @@ while ~eof
       [b,a]=butter(4,FREQUENCY_LOW/(FS/2),'high');
 
       % plot hits, misses and false alarms separately
-      if(~GROUNDTRUTH)
-        while voc_num<=min([200 size(skytruth,1)])
-          left=skytruth(voc_num,1);
-          right=skytruth(voc_num,2);
-          ax2_print(voc_num,left,right,'voc',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
-          voc_num=voc_num+1;
-        end
-      else
-        while hit_num<=min([20 length(hits)])
-          left =min([groundtruth(hits(hit_num),1) skytruth(groundtruth(hits(hit_num),3),1)]);
-          right=max([groundtruth(hits(hit_num),2) skytruth(groundtruth(hits(hit_num),3),2)]);
-          ax2_print(hit_num,left,right,'hit',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
-          hit_num=hit_num+1;
-        end
-
-        while miss_num<=min([100 size(misses,1)])
-          left=groundtruth(misses(miss_num),1);
-          right=groundtruth(misses(miss_num),2);
-          ax2_print(miss_num,left,right,'miss',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
-          miss_num=miss_num+1;
-        end
-
-        while fa_num<=min([100 size(false_alarms,1)])
-          left=skytruth(false_alarms(fa_num),1);
-          right=skytruth(false_alarms(fa_num),2);
-          ax2_print(fa_num,left,right,'false_alarm',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
-          fa_num=fa_num+1;
-        end
+      while voc_num<=min([200 size(skytruth,1)])
+        left=skytruth(voc_num,1);
+        right=skytruth(voc_num,2);
+        ax2_print(voc_num,left,right,'voc',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
+        voc_num=voc_num+1;
       end
     end
   end
 
   for i=1:length(data)
-    data(i).MT=data(i).MT_next;
+    clear data(i).MT;  data(i).MT=data(i).MT_next;
   end
-  im=im_next;
-  syls=syls_next;
+%   im=im_next;
+  clear syls;  syls=syls_next;
   chunk_curr=chunk_curr+1;
 end
 
 %dump files
-if(GROUNDTRUTH)
-  disp([num2str(num) ': ' num2str(size(groundtruth,1)) ' manually segmented vocalizations, ' num2str(length(misses)) ...
-      ' (' num2str(100*length(misses)/size(groundtruth,1),3) '%) of which are missed']);
-
-  disp([num2str(num) ': ' num2str(size(skytruth,1)) ' automatically segmented vocalizations, ' num2str(length(false_alarms)) ...
-      ' (' num2str(100*length(false_alarms)/size(skytruth,1),3) '%) of which are false alarms']);
-else
-  disp([num2str(num) ': ' num2str(size(skytruth,1)) ' automatically segmented vocalizations']);
-end
+disp([num2str(num) ': ' num2str(size(skytruth,1)) ' automatically segmented vocalizations']);
 
 tmp=[skytruth(:,1:2) skytruth(:,4:5)];
 save(fullfile(directory,'voc.txt'),'tmp','-ascii');
 save(fullfile(directory,'fc'),'freq_contours');
 save(fullfile(directory,'fc2'),'freq_contours2');
 save(fullfile(directory,'fh'),'freq_histograms');
-if(GROUNDTRUTH)
-  tmp=groundtruth(misses,1:2);
-  save(fullfile(directory,'miss.txt'),'tmp','-ascii');
-  tmp=[skytruth(false_alarms,1:2) skytruth(false_alarms,4:5)];
-  save(fullfile(directory,'fa.txt'),'tmp','-ascii');
-end
 
 varname=@(x) inputname(1);
 %fid=fopen(fullfile(directory,['params' sprintf('%d',CHANNELS) '.m']),'w');
