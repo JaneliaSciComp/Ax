@@ -19,7 +19,7 @@
 # NW: multi-taper time-bandwidth product
 # K: number of tapers
 # PVAL: F-test p-val threshold
-# FILEIN: the base filename and path of [0-9].wav files with a single channel each,
+# FILEIN: the path and base filename of a single .wav file containing all channels, or
 #     or .ch[0-9] files containing arrays of float32
 # FILEOUT: an integer to append to FILEIN to differentiate parameter sets used
 # START,STOP: optional time range, in seconds
@@ -31,15 +31,29 @@
 # julia -p 12 ax1.jl 200e3 0.001 15 29 0.01 'urine' '1'
 # julia -p 12 ax1.jl 450450 0.001 15 29 0.01 0 30 'groundtruth' '1'
 
-require("ax1b.jl")
-using MAT
+#using MAT
 using DSP
 using WAV
 #using Debug
 #using Profile
+using Distributions
 
+#using ClusterManagers
+#addprocs(10, cman=SGEManager())
+#require("/home/arthurb/projects/egnor/ax/ax1b.jl")  # full path on cmd line too
+
+require("ax1b.jl")
+
+#@debug
+#@bp
 function main(ARGS)
   tstart=time()
+
+  REMAP={}
+  local FILELEN_TIC
+  local NCHANNELS
+  local t_now_sec
+  local t_offset_tic
 
   if (length(ARGS)<6)
     require(ARGS[1])
@@ -94,40 +108,42 @@ function main(ARGS)
 
   NFFT=nextpow2(int(NFFT*FS))  # convert to ticks
 
-  NWINDOWS_PER_WORKER=int(12*256*1000/NFFT)  # NFFT/2 ticks
+  NWINDOWS_PER_WORKER=int(6*256*1000/NFFT)  # NFFT/2 ticks
 
-  FIRST_MT=NaN
-  LAST_MT=NaN
-  FRACTION_MT=NaN
+  tapers = float32(dpss(NFFT,NW))
 
   f=[0:(NFFT>>1)]*FS/NFFT
   df=f[2]-f[1]
 
-  tmp = split(FILEIN,"/")
-  BASEIN = tmp[end]
-  DIROUT = join(tmp[1:end-1],"/")
-  tmp = readall(`ls $DIROUT`)
-  tmp = split(tmp,"\n")
-  tmp2 = map((x) -> ismatch(Regex("$BASEIN.ch[0-9]"),x), tmp)
-  FILE_TYPE=1
-  if !any(tmp2)
-    tmp2 = map((x) -> ismatch(Regex("$BASEIN[0-9].wav"),x), tmp)
-    FILE_TYPE=2
-    if !any(tmp2)
-      print(["can't find any .wave or .ch files with basenmae '$FILEIN'"])
+  sig=invlogcdf(FDist(2,2*K-2),log(1-PVAL/NFFT))
+
+  if stat("$FILEIN.wav").inode!=0   # is there a better way?
+    FILETYPE="wav"
+    FILEPATH=""
+    FILEINs=[]
+    try
+      FILELEN_TIC, NCHANNELS=wavread("$FILEIN.wav"; format="size")
+    catch
+      print("can't open file '$filei'")
       return
     end
-  end
-  FILEINs=tmp[tmp2]
-  NCHANNELS=length(FILEINs)
-
-  REMAP={}
-  local FILE_LEN
-  local t_now_sec
-  local t_offset_tic
-  for i = 1:NCHANNELS
-    filei = string(DIROUT,"/",FILEINs[i])
-    if FILE_TYPE==1
+    REMAP=1.0:float(NCHANNELS)
+  else
+    FILETYPE="ch"
+    tmp = split(FILEIN,"/")
+    BASEIN = tmp[end]
+    FILEPATH = join(tmp[1:end-1],"/")
+    tmp = readall(`ls $FILEPATH`)
+    tmp = split(tmp,"\n")
+    tmp2 = map((x) -> ismatch(Regex("$BASEIN.ch[0-9]"),x), tmp)
+    FILEINs=tmp[tmp2]
+    NCHANNELS=length(FILEINs)
+    if length(NCHANNELS)==0
+      print(["can't find any .wav or .ch files with basename '$FILEIN'"])
+      return
+    end
+    for i = 1:NCHANNELS
+      filei = string(FILEPATH,"/",FILEINs[i])
       local fid
       try
         fid = open(filei,"r")
@@ -136,34 +152,23 @@ function main(ARGS)
         return
       end
       seekend(fid)
-      FILE_LEN=position(fid)/4/FS
+      FILELEN_TIC=int(position(fid)/4)
       close(fid)
       push!(REMAP,float(string(FILEINs[i][end])))
     end
-    if FILE_TYPE==2
-      try
-        FILE_LEN, foo = wavread(filei,format="size")
-      catch
-        print("can't open file '$filei'")
-        return
-      end
-      FILE_LEN /= FS
-      push!(REMAP,float(string(FILEINs[i][end-4])))
-    end
-    if !isdefined(Main,:START)
-      tmp=int(FILE_LEN*FS/(NFFT>>1)-1)
-      @printf("Processing %f min = %d windows = %f chunks of data in %s\n",
-          FILE_LEN/60, tmp, tmp/NWINDOWS_PER_WORKER, FILEINs[i])
-      t_offset_tic=0;
-      t_now_sec=0;
-    else
-      tmp=int((STOP-START)*FS/(NFFT>>1)-1)
-      @printf("Processing %f min = %d windows = %f chunks of data in %s\n",
-          (STOP-START)/60, tmp, tmp/NWINDOWS_PER_WORKER, FILEINs[i])
-      t_offset_tic=int(START*FS);
-      t_now_sec=START;
-    end
   end
+  FILE_LEN=FILELEN_TIC/FS
+
+  if !isdefined(Main,:START)
+    START_TIC=0;
+    STOP_TIC=FILELEN_TIC;
+  else
+    START_TIC=int(START*FS/(NFFT>>1))*(NFFT>>1);
+    STOP_TIC=int(STOP*FS);
+  end
+  tmp=int((STOP_TIC-START_TIC)/(NFFT>>1)-1)
+  @printf("Processing %d channels x %.1f min = %d windows = %.1f chunks of data in %s.%s\n",
+      NCHANNELS, (STOP_TIC-START_TIC)/FS/60, tmp, tmp/NWINDOWS_PER_WORKER, FILEIN, FILETYPE)
 
   fid_out=open("$FILEIN-$FILEOUT.ax","w")
   write(fid_out,uint8(VERSION))
@@ -176,39 +181,23 @@ function main(ARGS)
   write(fid_out,float64(PVAL))
   write(fid_out,float64(df))
 
-  tapers = float32(dpss(NFFT,NW))
+  T = [START_TIC : (NFFT>>1)*NWINDOWS_PER_WORKER : STOP_TIC];
+  idx = pmap(do_it, [(FILEPATH, FILEINs, FILEIN, FILETYPE, FILELEN_TIC, NCHANNELS, t,
+     NWINDOWS_PER_WORKER, NFFT, NW, K, PVAL, FS, tapers, sig) for t in T])
 
-  t_now=0
+  t=1;
   tloop=time()
-
-  while ((t_now_sec<FILE_LEN) && (!isdefined(Main,:STOP) || (t_now_sec<STOP)))
+  for i in idx
     if (time()-tloop)>10
-      tmp=t_now_sec
-      tmp2=0
-      if isdefined(Main,:START)
-        tmp=tmp-START
-        tmp2=START
-      end
-      if isdefined(Main,:STOP)
-        tmp=tmp/(STOP-tmp2)
-      else
-        tmp=tmp/(FILE_LEN-tmp2)
-      end
-      @printf("%d sec processed;  %d%% done\n",int(round(t_now_sec-tmp2)),int(round(100*tmp)))
+      @printf("%d sec processed;  %d%% done\n",
+          int((T[t]-START_TIC)/FS), int(100*(T[t]-START_TIC)/(STOP_TIC-START_TIC)))
       tloop=time()
     end
 
-    idx = pmap(do_it,
-       [(DIROUT, FILEINs, t_now, NW, K, PVAL, FS, NFFT, NWINDOWS_PER_WORKER, tapers, x-1, t_offset_tic, FILE_TYPE, int(round(FILE_LEN*FS))) for x in 1:NWORKERS])
-
-    for i in idx
-      for j in i
-        write(fid_out, t_now+j[1], j[2:3], REMAP[j[4]])
-      end
+    for j in i
+      write(fid_out, j[1:3], REMAP[j[4]])
     end
-
-    t_now_sec = t_now_sec+float(NFFT>>1)/FS*NWORKERS*NWINDOWS_PER_WORKER
-    t_now = t_now+NWORKERS*NWINDOWS_PER_WORKER
+    t+=1
   end
 
   write(fid_out,"Z")
@@ -217,8 +206,6 @@ function main(ARGS)
   tstop = time() - tstart
   @printf("Run time was %f minutes.\n",tstop/60)
 end
-
-#addprocs(12, cman=SGEManager())
 
 #@iprofile clear
 main(ARGS)

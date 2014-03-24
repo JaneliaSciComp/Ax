@@ -1,19 +1,18 @@
-using MAT
+#using MAT
 using WAV
-#using Debug
+using Debug
 #using Profile
-using Distributions
 using NumericExtensions
+using HDF5, JLD
+
+require("lock.jl")
 
 #@iprofile begin
-function ftest(data::Array{Float32,2}, tapers::Array{Float32,2}, p::Float64,
-    fft_in::Array{Float32,3}, fft_out::Array{Complex{Float32},3}, fft_plan::Any)
+function ftest(data::Array{Float32,2}, tapers::Array{Float32,2}, p::Float64)
 
   (NC,C)=size(data)
   (NK,K)=size(tapers);
   N=NC
-
-  #f = zeros(N)  # not sure above is correct
 
   Kodd = [1:2:K]
   Keven = [2:2:K]
@@ -21,9 +20,10 @@ function ftest(data::Array{Float32,2}, tapers::Array{Float32,2}, p::Float64,
   tapers2 = broadcast(*, tapers, ones(Float32,1,1,1))  # f x K x 1
   data = broadcast(*, data, ones(Float32,1,1,1))       # f x C x 1
   data = permutedims(data,(1,3,2))                     # f x 1 x C
-  broadcast!(*, fft_in, data, tapers2)                 # f x K x C
-  FFTW.execute(fft_plan.plan, fft_in, fft_out)
-  J = fft_out                                    # f x K x C
+  data = broadcast(*, data, tapers2)                   # f x K x C
+
+  # use slow rfft for nowb/c fast plan_rfft is buggy and in flux
+  J = rfft(data,1)                                     # f x K x C
 
   Jp = J[:,Kodd,:]                               # f x K x C
   H0 = sum(tapers2[:,Kodd],1)                    # 1 x K
@@ -38,25 +38,15 @@ function ftest(data::Array{Float32,2}, tapers::Array{Float32,2}, p::Float64,
   den=squeeze(sum(sqrdiff(Jp,Jhat),2),2)+squeeze(sum(abs2(J[:,Keven,:]),2),2)
   Fval=num./den
 
-  #sig=invlogcdf(FDist(2,2*K-2),log(1-p/N))
-  #var=den./(K*H0sq)
-  #sd=sqrt(var)
-
-  #A=A*Fs
-
-  #return Fval, A, f, sig, sd
   return Fval
 
 end
 #end #profile
 
 #@iprofile begin
-function brown_puckette(x,k,fs, fft_in2, fft_out2, fft_plan2)
+function brown_puckette(x,k,fs)
   nfft = length(x)
-  #X=np.fft.fft(x)
-  fft_in2 = x;
-  FFTW.execute(fft_plan2.plan, fft_in2, fft_out2)
-  X = fft_out2
+  X=rfft(x,1)
   Xh0 = 0.5*(X[k]-0.5*X[k+1]-0.5*X[k-1])
   Xh1 = 0.5*exp(im*2*pi*(k-1)/nfft) *
       (X[k] - 0.5*exp(im*2*pi/nfft)*X[k+1] - 0.5*exp(-1im*2*pi/nfft)*X[k-1])
@@ -80,71 +70,56 @@ function brown_puckette(x,k,fs, fft_in2, fft_out2, fft_plan2)
 end
 #end #profile
 
-function do_it(params)
-  DIROUT = params[1]
+@debug function do_it(params)
+  FILEPATH = params[1]
   FILEINs = params[2]
-  t_now = params[3]
-  NW = params[4]
-  K = params[5]
-  PVAL = params[6]
-  FS = params[7]
-  NFFT = params[8]
-  NWINDOWS_PER_WORKER = params[9]
-  tapers = params[10]
-  worker = params[11]
-  t_worker_tic = params[12]
-  FILE_TYPE = params[13]
-  FILE_LEN_TIC = params[14]
+  FILEIN = params[3]
+  FILETYPE = params[4]
+  FILELEN_TIC = params[5]
+  NCHANNELS = params[6]
+  t = params[7]
+  NWINDOWS_PER_WORKER = params[8]
+  NFFT = params[9]
+  NW = params[10]
+  K = params[11]
+  PVAL = params[12]
+  FS = params[13]
+  tapers = params[14]
+  sig = params[15]
 
-  NCHANNELS = length(FILEINs)
-  sig=invlogcdf(FDist(2,2*K-2),log(1-PVAL/NFFT))
-
-  fft_in = zeros(Float32, NFFT, K, NCHANNELS)
-  fft_out = zeros(Complex64, NFFT>>1+1, K, NCHANNELS)
-  fft_plan = FFTW.Plan(fft_in, fft_out, 1, FFTW.PATIENT, FFTW.NO_TIMELIMIT)
-  fft_in2 = zeros(Float32, NFFT)
-  fft_out2 = zeros(Complex64, NFFT>>1+1)
-  fft_plan2 = FFTW.Plan(fft_in2, fft_out2, 1, FFTW.PATIENT, FFTW.NO_TIMELIMIT)
-
-  #dd[1:(NFFT>>1),:]=dd[(end-NFFT>>1+1):end,:]
   NSAMPLES = (NFFT>>1)*(NWINDOWS_PER_WORKER+1);
-  dd = Array(Float32, NSAMPLES, NCHANNELS)
-  for i = 1:NCHANNELS
-    tmp=[]
-    tmp2=(t_now+worker*NWINDOWS_PER_WORKER)*(NFFT>>1)+t_worker_tic
-    filei=string(DIROUT,"/",FILEINs[i])
-    if tmp2<FILE_LEN_TIC
-      if FILE_TYPE==1
-        fid = open(filei,"r")
-        seek(fid, tmp2*4)
-        tmp = read(fid, Float32, min(NSAMPLES, FILE_LEN_TIC-tmp2))
-        close(fid)
-      end
-      if FILE_TYPE==2
-        y, fs, nbits, extra = wavread(filei,
-            subrange=(tmp2+1):min(tmp2+NSAMPLES, FILE_LEN_TIC))
-        tmp=float32(y)
-      end
+  if FILETYPE=="ch"
+    for i = 1:NCHANNELS
+      filei=string(FILEPATH,"/",FILEINs[i])
+      fid = open(filei,"r")
+      seek(fid, t*4)
+      tmp2 = read(fid, Float32, min(NSAMPLES, FILELEN_TIC-t))
+      if(i==1)  dd=similar(tmp2, (size(tmp2,1), NCHANNELS))  end
+      dd[:,i]=tmp2;
+      close(fid)
     end
-    if (length(tmp) < NSAMPLES)
-      tmp = [tmp, zeros(Float32, NSAMPLES-length(tmp))]
-    end
-    dd[:,i]=tmp
-    #dd[(NFFT>>1+1):end,i] = tmp
+  else #if FILETYPE=="wav"
+    dd, fs, nbits, extra =
+        wavread("$FILEIN.wav"; subrange=(t+1):min(t+NSAMPLES, FILELEN_TIC))
+    dd=float32(dd)
+  end
+  if (size(dd,1) < NSAMPLES)
+    dd = [dd, zeros(Float32, (NSAMPLES-size(dd,1),NCHANNELS))]
   end
 
   idx={}
   for j = 1:NWINDOWS_PER_WORKER
-    ddd=dd[[1:NFFT]+(j-1)*(NFFT>>1),:]
-    #(F, A, f, sig, sd) = ftest(ddd, tapers, FS, PVAL, fft_in, fft_out, fft_plan)
-    F = ftest(ddd, tapers, PVAL, fft_in, fft_out, fft_plan)
+    ddd=dd[[1:NFFT].+(j-1)*(NFFT>>1),:]
+    F = ftest(ddd, tapers, PVAL)
+#@bp
     for l = 1:NCHANNELS
-      tmp = 1 + find(F[2:end-1,l] .> sig)
+      tmp = 1 .+ find(F[2:end-1,l] .> sig)
       for m = 1:length(tmp)
-        freq, amp = brown_puckette(ddd[:,l],tmp[m],FS, fft_in2, fft_out2, fft_plan2)
-        push!(idx, [float64(j)+worker*NWINDOWS_PER_WORKER, freq, amp, float64(l)])
+        freq, amp = brown_puckette(ddd[:,l],tmp[m],FS)
+        push!(idx, [t/(NFFT>>1)+float64(j), freq, amp, float64(l)])
       end
     end
   end
+  @printf("done with %.1f\n",t/FS);
   return idx
 end

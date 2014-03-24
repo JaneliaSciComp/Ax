@@ -17,7 +17,7 @@
 % NW: multi-taper time-bandwidth product
 % K: number of tapers
 % PVAL: F-test p-val threshold
-% FILEIN: the path and base filename of a single .wav file containing all of the channels, or
+% FILEIN: the path and base filename of a single .wav file containing all channels, or
 %   of .ch[0-9] files each with a single channel of float32s
 % FILEOUT: an integer to append to FILEIN to differentiate parameter sets used
 % START,STOP: optional time range, in seconds
@@ -48,7 +48,6 @@ end
 tstart=tic;
 
 if(nargin<6)
-  %run(varargin{1});
   fid=fopen(varargin{1},'r');
   eval(fread(fid,'*char')');
   fclose(fid);
@@ -96,76 +95,65 @@ FS=FS/SUBSAMPLE;
 NFFT=2^nextpow2(NFFT*FS);  % convert to ticks
 NWINDOWS_PER_WORKER=round(12*256*1000/NFFT);  % NFFT/2 ticks
 
-FIRST_MT=nan;
-LAST_MT=nan;
-FRACTION_MT=nan;
-
 [tapers,eigs]=dpss(NFFT,NW,K);
-%tapers = tapers*sqrt(FS);
 
 f=(0:(NFFT/2))*FS/NFFT;
 df=f(2)-f(1);
 
 sig=finv(1-PVAL/NFFT,2,2*K-2); % F-distribution based 1-p% point
 
-[FILEPATH n e]=fileparts(FILEIN);
-DIR_OUT=fullfile(FILEPATH);
 if(exist([FILEIN '.wav'])==2)
-  FILE_TYPE='wav';
-  wavread(FILEIN,'size');
-  NCHANNELS=ans(2);
+  FILETYPE='wav';
+  FILEPATH='';
+  FILEINs=[];
+  try
+    FILELEN_TIC=wavread(FILEIN,'size');
+    NCHANNELS=FILELEN_TIC(2);
+    FILELEN_TIC=FILELEN_TIC(1);
+  catch
+    error(['can''t open file ''' FILEIN '''']);
+  end
+  [~, tmp, ~]=wavread(FILEIN,1);
+  if tmp~=FS
+    warning(['sampling rates in argument list (' num2str(FS) ') and file (' num2str(tmp)
+        ') do not match;  continuing with ' num2str(tmp)]);
+    FS=tmp;
+  end
+  REMAP=1:NCHANNELS;
 else
-  FILE_TYPE='ch';
+  FILETYPE='ch';
+  [FILEPATH n e]=fileparts(FILEIN);
   FILEINs=dir([FILEIN '.ch*']);
   NCHANNELS=length(FILEINs);
   if(NCHANNELS==0)
     error(['can''t find any .ch files with basename ' FILEIN]);
   end
-end
-
-switch FILE_TYPE
-  case 'ch'
-    for i=1:NCHANNELS
-      filei=fullfile(FILEPATH,FILEINs(i).name);
-      fid=fopen(filei,'r');
-      if(fid==-1)
-        error(['can''t open file ''' filei '''']);
-      end
-      fseek(fid,0,1);
-      ftell(fid)/4/FS;
-      if((i>1)&&(ans~=FILE_LEN))  error('not all file lengths are the same');  end
-      FILE_LEN=ans;
-      REMAP(i)=str2num(FILEINs(i).name(end));
-      fclose(fid);
-    end    
-  case 'wav'
-    FILE_LEN=wavread(FILEIN,'size');
-    FILE_LEN=FILE_LEN(1)/FS;
-    [~, tmp, ~]=wavread(FILEIN,1);
-    if tmp~=FS
-      warning(['sampling rates in argument list (' num2str(FS) ') and file (' num2str(tmp)
-          ') do not match;  continuing with ' num2str(tmp)]);
-      FS=tmp;
+  for i=1:NCHANNELS
+    filei=fullfile(FILEPATH,FILEINs(i).name);
+    fid=fopen(filei,'r');
+    if(fid==-1)
+      error(['can''t open file ''' filei '''']);
     end
-    REMAP=1:NCHANNELS;
-    FILEINs=[];
+    fseek(fid,0,1);
+    ftell(fid)/4;
+    if((i>1)&&(ans~=FILELEN_TIC))  error('not all file lengths are the same');  end
+    FILELEN_TIC=ans;
+    REMAP(i)=str2num(FILEINs(i).name(end));
+    fclose(fid);
+  end    
 end
+FILELEN=FILELEN_TIC/FS;
+
 if(~exist('START','var'))
-  tmp=round(FILE_LEN*FS/(NFFT/2)-1);
-  disp(['Processing ' num2str(NCHANNELS) ' channels x ' num2str(FILE_LEN/60,3) ' min = ' num2str(tmp) ...
-      ' windows = ' num2str(tmp/NWINDOWS_PER_WORKER,3) ' chunks of data in ' FILEIN '.' FILE_TYPE]);
-  t_offset_tic = 0;
-  t_offset_window = 0;
-  t_now_sec=0;
+  START_TIC=0;
+  STOP_TIC=FILELEN_TIC;
 else
-  tmp=round((STOP-START)*FS/(NFFT/2)-1);
-  disp(['Processing ' num2str(NCHANNELS) ' channels x ' num2str((STOP-START)/60,3) ' min = ' num2str(tmp) ...
-      ' windows = ' num2str(tmp/NWINDOWS_PER_WORKER,3) ' chunks of data in ' FILEIN '.' FILE_TYPE]);
-  %t_offset_tic = round(START*FS);
-  t_offset_tic = round(START*FS/(NFFT/2))*(NFFT/2);
-  t_offset_window = round(START*FS/(NFFT/2));
-  t_now_sec=START;
+  START_TIC=round(START*FS/(NFFT/2))*(NFFT/2);
+  STOP_TIC=round(STOP*FS);
 end
+tmp=round((STOP_TIC-START_TIC)/(NFFT/2)-1);
+disp(['Processing ' num2str(NCHANNELS) ' channels x ' num2str((STOP_TIC-START_TIC)/FS/60,3) ' min = ' num2str(tmp) ...
+    ' windows = ' num2str(tmp/NWINDOWS_PER_WORKER,3) ' chunks of data in ' FILEIN '.' FILETYPE]);
 
 fid_out=fopen([FILEIN '-' FILEOUT '.ax'],'w');
 fwrite(fid_out,uint8([VERSION SUBSAMPLE NWINDOWS_PER_WORKER]),'uint8');  % CHUNK not necessary
@@ -173,43 +161,36 @@ fwrite(fid_out,uint32([FS NFFT]),'uint32');
 fwrite(fid_out,uint16([NW K]),'uint16');
 fwrite(fid_out,[PVAL df],'double');
 
-FILE_LEN_TIC=round(FILE_LEN*FS);
-
-t_now_window=0;
+t=START_TIC;
 tic;
-while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
+while(t<STOP_TIC)
   if(toc>10)
-    tmp=t_now_sec;
-    tmp2=0;  if(exist('START','var'))  tmp=tmp-START;  tmp2=START;  end
-    if(exist('STOP','var'))  tmp=tmp/(STOP-tmp2);  else  tmp=tmp/(FILE_LEN-tmp2);  end
-    disp([num2str(round(t_now_sec-tmp2)) ' sec processed;  ' num2str(round(100*tmp)) '% done']);
+    disp([num2str(round((t-START_TIC)/FS)) ' sec processed;  '...
+        num2str(round(100*(t-START_TIC)/(STOP_TIC-START_TIC))) '% done']);
     tic;
   end
 
   idx=cell(1,NWORKERS);
   parfor i=1:NWORKERS
 %   for i=1:NWORKERS
-
     dd=[];
     NSAMPLES = NFFT/2*(NWINDOWS_PER_WORKER+1);
-    tmp=(t_now_window+(i-1)*NWINDOWS_PER_WORKER)*NFFT/2+t_offset_tic;
-    count=0;
-    if tmp<FILE_LEN_TIC
-      switch FILE_TYPE
-        case 'ch'
-          for j=1:NCHANNELS
-            fid = fopen(fullfile(FILEPATH,FILEINs(j).name),'r');
-            fseek(fid,tmp*4,-1);
-            [dd(:,j) count] = fread(fid, NSAMPLES, 'float32', 4*(SUBSAMPLE-1));
-            fclose(fid);
-          end
-        case 'wav'
-          dd=single(wavread(FILEIN,[tmp+1 min(tmp+NSAMPLES, FILE_LEN_TIC)]));
-          count=size(dd,1);
-      end
+    tmp=t+(i-1)*NFFT/2*NWINDOWS_PER_WORKER;
+    if(tmp>=STOP_TIC)  continue;  end
+    switch FILETYPE
+      case 'ch'
+        for j=1:NCHANNELS
+          fid = fopen(fullfile(FILEPATH,FILEINs(j).name),'r');
+          fseek(fid,tmp*4,-1);
+          dd(:,j) = fread(fid, NSAMPLES, 'float32', 4*(SUBSAMPLE-1));
+          fclose(fid);
+        end
+      case 'wav'
+        dd=wavread(FILEIN,[tmp+1 min(tmp+NSAMPLES, FILELEN_TIC)]);
     end
-    if(count<NSAMPLES)
-      dd=[dd; zeros(NSAMPLES-count, NCHANNELS, 'single')];
+    dd=single(dd);
+    if(size(dd,1)<NSAMPLES)
+      dd=[dd; zeros(NSAMPLES-size(dd,1), NCHANNELS, 'single')];
     end
 
     for j=1:NWINDOWS_PER_WORKER
@@ -219,19 +200,18 @@ while((t_now_sec<FILE_LEN) && (~exist('STOP','var') || (t_now_sec<STOP)))
         tmp=1+find(F(2:end-1,l)'>sig);
         for m=1:length(tmp)
           [freq,amp]=brown_puckette(ddd(:,l)',tmp(m),FS);
-          idx{i}{end+1} = [j+(i-1)*NWINDOWS_PER_WORKER, freq, amp, l];
+          idx{i}{end+1} = [t/(NFFT/2)+(i-1)*NWINDOWS_PER_WORKER+j, freq, amp, l];
         end
       end
     end
   end
   for i=idx
     for j=i{1}
-      fwrite(fid_out,[t_now_window+t_offset_window+j{1}(1) j{1}(2:3) REMAP(j{1}(4))],'double');  % blegh
+      fwrite(fid_out,[j{1}(1:3) REMAP(j{1}(4))],'double');  % blegh
     end
   end
 
-  t_now_sec=t_now_sec+NFFT/2/FS*NWORKERS*NWINDOWS_PER_WORKER;
-  t_now_window=t_now_window+NWORKERS*NWINDOWS_PER_WORKER;
+  t = t+NFFT/2*NWINDOWS_PER_WORKER*NWORKERS;
 end
 
 fwrite(fid_out,'Z','uchar');
@@ -255,12 +235,6 @@ function Fval = ftestc(data,tapers,pval)
 [NK,K]=size(tapers);
 N=NC;
 
-% df=Fs/nfft;
-% f=0:df:Fs; % all possible frequencies
-% f=f(1:nfft);
-% findx=find(f>=fpass(1) & f<=fpass(end));
-% f=f(findx);
-
 Kodd=1:2:K;
 Keven=2:2:K;
 
@@ -278,7 +252,6 @@ Ap=permute(A,[1 3 2]);                      % f x 1 x C
 Jhat=bsxfun(@times, Ap, H0);
 
 num=(K-1).*(abs(A).^2).*H0sq;
-%den=squeeze(sum(abs(Jp-Jhat).^2,2)+sum(abs(J(findx,Keven,:)).^2,2));
 den1=Jp-Jhat;
 den1=real(den1).*real(den1)+imag(den1).*imag(den1);
 den1=squeeze(sum(den1,2));
@@ -288,11 +261,6 @@ den2=squeeze(sum(den2,2));
 den = den1 + den2;
 Fval=num./den;
 
-%sig=finv(1-pval/N,2,2*K-2); % F-distribution based 1-p% point
-% var=den./(K*squeeze(H0sq)); % variance of amplitude
-% sd=sqrt(var);% standard deviation of amplitude
-% 
-% A=A*Fs;
 
 
 % from charpentier (1986) and brown and puckette (1993; JASA)
