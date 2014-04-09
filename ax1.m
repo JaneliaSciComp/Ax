@@ -36,12 +36,12 @@ if((nargin~=3)&&(nargin~=5)&&(nargin~=7)&&(nargin~=9))
 end
 
 close_it=0;
-if((exist('matlabpool')==2) && (matlabpool('size')==0))
+if((exist('parpool')==2) && (length(gcp)==0))
   try
-    matlabpool open
+    parpool;
     close_it=1;
   catch
-    disp('WARNING: could not open matlab pool.  proceeding with a single thread.');
+    disp('WARNING: could not open parallel pool of workers.  proceeding with a single thread.');
   end
 end
 
@@ -85,8 +85,9 @@ VERSION=1;
 
 SUBSAMPLE=1;
 NWORKERS=0;
-if(exist('matlabpool')==2)
-  NWORKERS=matlabpool('size');
+if(exist('parpool')==2)
+  gcp('nocreate');
+  NWORKERS=ans.NumWorkers;
 end
 if(NWORKERS==0)  NWORKERS=1;  end
 
@@ -107,17 +108,16 @@ if(exist([FILEIN '.wav'])==2)
   FILEPATH='';
   FILEINs=[];
   try
-    FILELEN_TIC=wavread(FILEIN,'size');
-    NCHANNELS=FILELEN_TIC(2);
-    FILELEN_TIC=FILELEN_TIC(1);
+    info=audioinfo([FILEIN '.wav']);
   catch
     error(['can''t open file ''' FILEIN '''']);
   end
-  [~, tmp, ~]=wavread(FILEIN,1);
-  if tmp~=FS
-    warning(['sampling rates in argument list (' num2str(FS) ') and file (' num2str(tmp)
-        ') do not match;  continuing with ' num2str(tmp)]);
-    FS=tmp;
+  FILELEN_TIC=info.TotalSamples;
+  NCHANNELS=info.NumChannels;
+  if info.SampleRate~=FS
+    warning(['sampling rates in argument list (' num2str(FS) ') and file (' num2str(info.SampleRate)
+        ') do not match;  continuing with ' num2str(info.SampleRate)]);
+    FS=info.SampleRate;
   end
   REMAP=1:NCHANNELS;
 else
@@ -186,7 +186,7 @@ while(t<STOP_TIC)
           fclose(fid);
         end
       case 'wav'
-        dd=wavread(FILEIN,[tmp+1 min(tmp+NSAMPLES, FILELEN_TIC)]);
+        dd=audioread([FILEIN '.wav'],[tmp+1 min(tmp+NSAMPLES, FILELEN_TIC)]);
     end
     dd=single(dd);
     if(size(dd,1)<NSAMPLES)
@@ -220,11 +220,11 @@ fclose(fid_out);
 tstop=toc(tstart);
 disp(['Run time was ' num2str(tstop/60,3) ' minutes.']);
 
-if((exist('matlabpool')==2) && (matlabpool('size')>0) && close_it)
+if((exist('parpool')==2) && (length(gcp)>0) && close_it)
   try
-    matlabpool close
+    delete(gcp('nocreate'));
   catch
-    disp('WARNING: could not close matlab pool.  exiting anyway.');
+    disp('WARNING: could not close parallel pool of workers.  exiting anyway.');
   end
 end
 

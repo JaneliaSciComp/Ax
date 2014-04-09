@@ -120,12 +120,12 @@ if(~isempty(tmp))
   datafiles=unique(datafiles);
   close_it=0;
   if(~isdeployed && length(datafiles)>1)
-    if(exist('matlabpool')==2 && matlabpool('size')==0)
+    if(exist('parpool')==2 && (length(gcp)==0))
       try
-        matlabpool open
+        parpool;
         close_it=1;
       catch
-        disp('WARNING: could not open matlab pool.  proceeding with a single thread.');
+        disp('WARNING: could not open parallel pool of workers.  proceeding with a single thread.');
       end
     end
   end
@@ -136,11 +136,11 @@ if(~isempty(tmp))
         merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
         minimum_vocalization_length, channels, fullfile(data_path, datafiles{i}));
   end
-  if((exist('matlabpool')==2) && (matlabpool('size')>0) && close_it)
+  if((exist('parpool')==2) && (length(gcp)==0) && close_it)
     try
-      matlabpool close
+      delete(gcp('nocreate'));
     catch
-      disp('WARNING: could not close matlab pool.  exiting anyway.');
+      disp('WARNING: could not close parallel pool of workers.  exiting anyway.');
     end
   end
 else
