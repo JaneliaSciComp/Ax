@@ -79,6 +79,17 @@ switch nargin
     error('invalid args');
 end
 
+if(ischar(frequency_low))                 frequency_low=str2num(frequency_low);                               end
+if(ischar(frequency_high))                frequency_high=str2num(frequency_high);                             end
+if(ischar(convolution_size))              convolution_size=str2num(convolution_size);                         end
+if(ischar(minimum_object_area))           minimum_object_area=str2num(minimum_object_area);                   end
+if(ischar(merge_harmonics))               merge_harmonics=str2num(merge_harmonics);                           end
+if(ischar(merge_harmonics_overlap))       merge_harmonics_overlap=str2num(merge_harmonics_overlap);           end
+if(ischar(merge_harmonics_ratio))         merge_harmonics_ratio=str2num(merge_harmonics_ratio);               end
+if(ischar(merge_harmonics_fraction))      merge_harmonics_fraction=str2num(merge_harmonics_fraction);         end
+if(ischar(minimum_vocalization_length))   minimum_vocalization_length=str2num(minimum_vocalization_length);   end
+if(ischar(channels))                      channels=str2num(channels);                                         end
+
 if(isempty(frequency_low) || isempty(frequency_high) || (frequency_low<0) || (frequency_high<0) || (frequency_low>=frequency_high))
   error('frequency_low should be less than frequency_high and both should be non-negative real numbers');
 end

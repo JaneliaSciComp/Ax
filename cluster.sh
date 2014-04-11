@@ -22,6 +22,8 @@ if [ $# -ne 3 ] && [ $# -ne 5 ] ; then
   exit
 fi
 
+eval $( sed "s/\[/\\(/g" $1 | sed "s/\]/\\)/g" | dos2unix )
+
 if [ -d $2 ] ; then
   ii=$(ls -1 ${2%/}/*.ch* | sed s/\.ch[0-9]*// | uniq)
   dir_name=$2
@@ -33,8 +35,6 @@ fi
 
 if [ $(($3 & 1)) -gt 0 ] ; then
   echo starting ax1
-
-  eval $( sed "s/\[/\\(/g" $1 | sed "s/\]/\\)/g" | dos2unix )
 
   # get maximum length of params
   tmp=(${#FS[@]} ${#NW[@]} ${#K[@]} ${#PVAL[@]} ${#NFFT[@]})
@@ -109,7 +109,10 @@ if [ $(($3 & 2)) -gt 0 ] ; then
     job_name=$(basename $i)
     qsub -N "$job_name" \
         -b y -j y -cwd -o "$dir_name/$job_name.log" \
-        -V cluster3.sh "\"$1\"" "\"$i\""
+        -V cluster3.sh "\"${frequency_low}\"" "\"${frequency_high}\"" "\"${convolution_size[*]}\"" \
+        "\"${minimum_object_area}\"" "\"${merge_harmonics}\"" "\"${merge_harmonics_overlap}\"" \
+        "\"${merge_harmonics_ratio}\"" "\"${merge_harmonics_fraction}\"" \
+        "\"${minimum_vocalization_length}\"" "\"${channels[*]}\"" "\"$i\""
   done
   echo check the .log file to see when ax2 finishes
   echo goodbye
