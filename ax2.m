@@ -201,7 +201,7 @@ df=min([data.df])/10;
 minNFFT=min([data.NFFT]);
 maxNFFT=max([data.NFFT]);
 FS=data(1).FS;
-CHUNK_TIME_SEC=10;  % sec
+CHUNK_TIME_SEC=5;  % sec
 CHUNK_TIME_WINDOWS=round(CHUNK_TIME_SEC*FS/(maxNFFT/2))*maxNFFT./[data.NFFT];  % in units of windows
 skytruth=[];
 freq_contours={};
@@ -271,7 +271,7 @@ while ~eof
     end
 
     %convolve
-    im_next=[zeros(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2) im_next zeros(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2)];
+    im_next=[false(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2) im_next false(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2)];
     im_next=logical(conv2(single(im_next),ones(CONVOLUTION_SIZE_PIX),'same'));
 
     %segment
@@ -300,9 +300,13 @@ while ~eof
           %if((max(ri) < (min(rj)-1)) || (max(rj) < (min(ri)-1)))  j=j+1;  continue;  end
           %cj=cj+chunk_splits(k+1)-chunk_splits(k);
           cj=cj+CHUNK_TIME_WINDOWS(1);
-          min(min((repmat(ri,1,length(rj))-repmat(rj',length(ri),1)).^2 + ...
-                  (repmat(ci,1,length(cj))-repmat(cj',length(ci),1)).^2));
-          if ans<=2
+%           min(min((repmat(ri,1,length(rj))-repmat(rj',length(ri),1)).^2 + ...
+%                   (repmat(ci,1,length(cj))-repmat(cj',length(ci),1)).^2));
+          smallest=inf;
+          for k=1:length(rj)
+            smallest=min(smallest, min((ri-rj(k)).^2 + (ci-cj(k)).^2));
+          end
+          if smallest<=2
             %disp(['unsplitting syllable between chunks #' num2str(k) '-' num2str(k+1)]);
             flag=1;
             syls.PixelIdxList{i}=[syls.PixelIdxList{i}; ...
