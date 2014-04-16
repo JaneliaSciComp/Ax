@@ -1,4 +1,4 @@
-Acoustic Segmenter (Ax)
+Acoustic Segmenter (Ax) [![Picture](/jfrc_grey_180x40.png)](http://www.janelia.org)
 =======================
 
 Given one or more time series of the same source, find tones that are
