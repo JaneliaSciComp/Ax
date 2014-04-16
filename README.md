@@ -103,3 +103,12 @@ with ax1(), it can contain multiple sets with cluster.sh:
 
 For more details, including file formats, see the documentation at the top
 of each file of source code.
+
+
+Author
+======
+
+Ben Arthur, arthurb@hhmi.org  
+[Scientific Computing](http://www.janelia.org/research-resources/computing-resources)  
+[Janelia Farm Research Campus](http://www.janelia.org)  
+[Howard Hughes Medical Institute](http://www.hhmi.org)
