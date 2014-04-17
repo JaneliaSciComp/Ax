@@ -1,14 +1,14 @@
 FS=450450;
-NFFT=[0.009, 0.0045, 0.0022];
-NW=18;
-K=24;
+NFFT=[0.00025, 0.000125, 0.0000625];
+NW=[11, 6, 3];
+K=[21, 11, 5];
 PVAL=0.01;
 
-channels=[1, 2, 3, 4];
-frequency_low=1e3;
-frequency_high=20e3;
+channels=[];
+frequency_low=20e3;
+frequency_high=120e3;
 convolution_size=[1300, 0.001];
-minimum_object_area=12.25;
+minimum_object_area=18.75;
 merge_harmonics=0;
 merge_harmonics_overlap=0.9;
 merge_harmonics_ratio=0.1;
