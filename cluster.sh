@@ -84,7 +84,7 @@ if [ $(($3 & 1)) -gt 0 ] ; then
     for j in $(seq 0 $((${#NFFT[@]} - 1))) ; do
       k=$((k+1))
       #echo $j
-      qsub -N "$job_name-$j" \
+      qsub -N "ax$job_name-$j" \
           -pe batch 16 \
           -b y -j y -cwd -o "$dir_name/$job_name-$j.log" \
           -V cluster2.sh "\"${FS[j]}\"" "\"${NFFT[j]}\"" "\"${NW[j]}\"" "\"${K[j]}\"" "\"${PVAL[j]}\"" "\"$i\"" "\"$j\"" "\"$4\"" "\"$5\""
