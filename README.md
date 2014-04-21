@@ -33,13 +33,13 @@ First, create a text file containing your parameters of choice:
 
     % for ax1()
     FS=450450;
-    NFFT=0.001;
-    NW=22;
-    K=43;
+    NFFT=0.0000625;
+    NW=3;
+    K=5;
     PVAL=0.01;
 
     % for ax2()
-    channels=[1, 2, 4];
+    channels=[];
     frequency_low=20e3;
     frequency_high=120e3;
     convolution_size=[1300, 0.001];
@@ -70,9 +70,9 @@ Time-frequency pixels can be calculated from the same raw data using
 multiple different sets of parameters.  The case below creates rawdata-1.ax,
 rawdata-2.ax, and rawdata-3.ax, each of which uses a different value for NFFT.
 
-    >>ax1(450450, 0.001,   22, 43, 0.01 ,'rawdata', '1')
-    >>ax1(450450, 0.0005,  22, 43, 0.01 ,'rawdata', '2')
-    >>ax1(450450, 0.00025, 22, 43, 0.01 ,'rawdata', '3')
+    >>ax1(450450, 0.0000625,  3,  5, 0.01 ,'rawdata', '1')
+    >>ax1(450450, 0.000125,   6, 11, 0.01 ,'rawdata', '2')
+    >>ax1(450450, 0.00025,   11, 21, 0.01 ,'rawdata', '3')
 
 Pixels from all .ax files with the specified base file name are combined
 by ax2() to create a single list of bounding boxes.
@@ -86,19 +86,19 @@ miss rate:
 The parameter space can be searched for the set which minimizes errors
 using the script in optimize_parameters.m
 
-Jobs can be batched to a cluster of computers using the Sun Grid Engine
-scheduler using the shell script in cluster.sh.  First compile ax1.m and
-ax2.m using the Matlab compiler and then:
+Jobs can be batched to a cluster of computers which uses the Sun Grid Engine
+scheduler as follows:
 
-    %./cluster.sh ./parameters.txt ./rawdata 2
+    %./compile.sh        # this only needs to be done once 
+    %./cluster.sh ./parameters.txt ./rawdata 3
 
 Whereas the text file can only contain a single set of parameters when used
 with ax1(), it can contain multiple sets with cluster.sh:
 
     FS=450450;
-    NFFT=[0.001, 0.0005, 0.00025];
-    NW=22;
-    K=43;
+    NFFT=[0.00025, 0.000125, 0.0000625];
+    NW=[11, 6, 3];
+    K=[21, 11, 5];
     PVAL=0.01;
 
 For more details, including file formats, see the documentation at the top
