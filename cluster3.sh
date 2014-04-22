@@ -19,7 +19,7 @@ fi
 
 mkdir $MCR_CACHE_ROOT
 
-run_ax2.sh /usr/local/matlab-2014a $1 $2 $3 $4 $5 $6 $7 $8 $9 ${10} ${11}
+run_ax2.sh /usr/local/matlab-2014a $1 $2 \"$3\" $4 $5 $6 $7 $8 $9 \"${10}\" ${11}
 
 rm -rf $MCR_CACHE_ROOT
 

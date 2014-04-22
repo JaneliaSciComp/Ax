@@ -76,7 +76,7 @@ switch nargin
     channels=varargin{10};
     data_path=varargin{11};
   otherwise
-    error('invalid args');
+    error([num2str(nargin) ' args input, either 2 or 11 expected']);
 end
 
 if(ischar(frequency_low))                 frequency_low=str2num(frequency_low);                               end

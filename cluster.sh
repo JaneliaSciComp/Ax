@@ -107,7 +107,7 @@ if [ $(($3 & 2)) -gt 0 ] ; then
   echo starting ax2
   for i in $ii ; do
     job_name=$(basename $i)
-    qsub -N "$job_name" \
+    qsub -N "ax$job_name" \
         -b y -j y -cwd -o "$dir_name/$job_name.log" \
         -V cluster3.sh "\"${frequency_low}\"" "\"${frequency_high}\"" "\"${convolution_size[*]}\"" \
         "\"${minimum_object_area}\"" "\"${merge_harmonics}\"" "\"${merge_harmonics_overlap}\"" \
