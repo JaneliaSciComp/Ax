@@ -3,10 +3,11 @@ Acoustic Segmenter (Ax) [![Picture](/jfrc_grey_180x40.png)](http://www.janelia.o
 
 Given one or more time series of the same source, find tones that are
 significantly above background noise.  Multi-taper harmonic analysis is
-used to identify time-frequency pixels containing signal and machine vision
-techniques are used to cluster these into contours.  Output are bounding
-boxes consisting of start and stop times, and low and high frequencies.
-Designed for audio recordings of behaving animals but should generalize.
+used to identify time-frequency pixels containing signal and machine
+vision techniques are used to turn adjacent pixels into contours.
+Output are bounding boxes consisting of start and stop times, and low and
+high frequencies.  Designed for audio recordings of behaving animals but
+should generalize.
 
 
 System Requirements
@@ -63,8 +64,8 @@ a list of bounding boxes:
 
 Parameters can also be directly specified as input arguments:
 
-    >>ax1(450450, 0.001, 22, 43, 0.01, 'rawdata', '1')
-    >>ax2([1, 2, 4], 20e3, 120e3, [1300, 0.001], 18.75, 0, 0.9, 0.1, 0.9, 0, 'rawdata')
+    >>ax1(450450, 0.0000625, 3, 5, 0.01, 'rawdata', '1')
+    >>ax2([], 20e3, 120e3, [1300, 0.001], 18.75, 0, 0.9, 0.1, 0.9, 0, 'rawdata')
 
 Time-frequency pixels can be calculated from the same raw data using
 multiple different sets of parameters.  The case below creates rawdata-1.ax,
@@ -77,14 +78,15 @@ rawdata-2.ax, and rawdata-3.ax, each of which uses a different value for NFFT.
 Pixels from all .ax files with the specified base file name are combined
 by ax2() to create a single list of bounding boxes.
 
-To test the accuracy first manually annotote the raw data to create
+To test the accuracy first manually annotate the raw data (with
+e.g. [Tempo](https://github.com/JaneliaSciComp/tempo)) to create
 human_voc.txt, and then use groundtruth() to compute Ax's false alarm and
 miss rate:
 
     >>[miss, false_alarm, ~, ~, ~]=groundtruth('human_voc.txt', 'rawdata-out<TIMESTAMP>/voc.txt', [])
 
 The parameter space can be searched for the set which minimizes errors
-using the script in optimize_parameters.m
+using the script in optimize_parameters.m (forthcoming).
 
 Jobs can be batched to a cluster of computers which uses the Sun Grid Engine
 scheduler as follows:
