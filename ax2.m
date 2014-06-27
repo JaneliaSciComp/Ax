@@ -24,7 +24,7 @@
 %     merge_harmonics_fraction is the fraction of the overlap that must be within the ratio tolerance
 %   minimum_vocalization_length is the minimum vocalization length in sec
 %   channels is a vector of which channels to use, or [] to use all of them
-%   data_path can be to a folder or to a set of files.  for the latter, omit the .ch* suffix
+%   data_path can be to a folder or to a set of files.  for the latter, omit the .wav suffix
 %
 % four files are output:
 %   voc: an Mx4 array whose columns are the start & stop times (sec), and low & high frequences (Hz)
@@ -187,7 +187,7 @@ tmp=dir([filename,'*.ax']);
 for i=1:length(tmp)
   disp([num2str(num) ': loading ' tmp(i).name]);
   fid(i)=fopen(fullfile(fileparts(filename),tmp(i).name));
-  data(i).VERSION=fread(fid(i),1,'uint8');
+  data(i).VERSION_FILE_FORMAT=fread(fid(i),1,'uint8');
   data(i).SUBSAMPLE=fread(fid(i),1,'uint8');
   data(i).CHUNK=fread(fid(i),1,'uint8');
   data(i).FS=fread(fid(i),1,'uint32');
@@ -531,6 +531,19 @@ for i=1:length(data)
   end
   fprintf(fid,'\n');
 end
+
+if ispc
+  [s,VERSION_AX]=system('"c:\\Program Files (x86)\Git\bin\git" log -1 --pretty=format:"%ci %H"');
+else
+  [s,VERSION_AX]=system('TERM=xterm git log -1 --pretty=format:"#%ci %H#"');
+  strfind(VERSION_AX,'#');
+  VERSION_AX=VERSION_AX((ans(1)+1):(ans(2)-1));
+end
+if s
+    warning('cant''t find git.  to save version info, git-bash must be installed.');
+end
+
+fprintf(fid,'VERSION_AX=''%s'';\n',VERSION_AX);
 fprintf(fid,'%s=%g;\n',varname(FREQUENCY_LOW),FREQUENCY_LOW);
 fprintf(fid,'%s=%g;\n',varname(FREQUENCY_HIGH),FREQUENCY_HIGH);
 fprintf(fid,'%s=[%g %g];\n',varname(CONVOLUTION_SIZE),CONVOLUTION_SIZE);
