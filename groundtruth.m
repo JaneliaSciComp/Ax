@@ -25,8 +25,8 @@
 
 function [miss, false_alarm, split, lump, sizes]=groundtruth(ground_file, sky_file, time_range)
 
-% tmp=load(ground_file,'startTimes','stopTimes','lowFreqs','highFreqs');   % a .mat file from Tempo
-% ground_box=[tmp.startTimes' tmp.stopTimes' tmp.lowFreqs' tmp.highFreqs'];
+plot_flag=true;
+
 ground_box=load(ground_file);  % a .txt file from e.g. Tempo
 sky_box=load(sky_file);  % a .txt file from e.g. Ax
 
@@ -45,30 +45,34 @@ else
   sizes=[];
 end
 
-figure;
-subplot(2,1,1);  hold on;
-[miss split]=groundtruth_guts(ground_box, sky_box, 1);
-[false_alarm lump]=groundtruth_guts(sky_box, ground_box, 3);
+if(plot_flag)
+  figure;
+  subplot(2,1,1);  hold on;
+end
+[miss split]=groundtruth_guts(ground_box, sky_box, 1, plot_flag);
+[false_alarm lump]=groundtruth_guts(sky_box, ground_box, 3, plot_flag);
 
-subplot(2,2,3);
-[n,x]=hist(miss,50);
-bar(x,n,'barwidth',1,'facecolor','k');
-num=sum(miss>0.5);  den=length(miss);
-title([num2str(num) '/' num2str(den) '=' num2str(num/den*100,3) '% misses, ' ...
-    num2str(sum(split>1)/den*100,3) '% splits']);
-xlabel('miss score')
-ylabel('# vocs');
-axis tight;
+if(plot_flag)
+  subplot(2,2,3);
+  [n,x]=hist(miss,50);
+  bar(x,n,'barwidth',1,'facecolor','k');
+  num=sum(miss>0.5);  den=length(miss);
+  title([num2str(num) '/' num2str(den) '=' num2str(num/den*100,3) '% misses, ' ...
+      num2str(sum(split>1)/den*100,3) '% splits']);
+  xlabel('miss score')
+  ylabel('# vocs');
+  axis tight;
 
-subplot(2,2,4);
-[n,x]=hist(false_alarm,50);
-bar(x,n,'barwidth',1,'facecolor','k');
-num=sum(false_alarm>0.5);  den=length(false_alarm);
-title([num2str(num) '/' num2str(den) '=' num2str(num/den*100,3) '% false alarms, ' ...
-    num2str(sum(lump>1)/den*100,3) '% lumps']);
-xlabel('false alarm score');
-ylabel('# vocs');
-axis tight;
+  subplot(2,2,4);
+  [n,x]=hist(false_alarm,50);
+  bar(x,n,'barwidth',1,'facecolor','k');
+  num=sum(false_alarm>0.5);  den=length(false_alarm);
+  title([num2str(num) '/' num2str(den) '=' num2str(num/den*100,3) '% false alarms, ' ...
+      num2str(sum(lump>1)/den*100,3) '% lumps']);
+  xlabel('false alarm score');
+  ylabel('# vocs');
+  axis tight;
+end
 
 
 function [x,y]=bbox2polygon(bbox)
@@ -77,7 +81,7 @@ x=[bbox(1) bbox(1) bbox(2) bbox(2) bbox(1)];
 y=[bbox(3) bbox(4) bbox(4) bbox(3) bbox(3)];
 
 
-function [overlap_fraction overlap_num]=groundtruth_guts(this, that, color)
+function [overlap_fraction overlap_num]=groundtruth_guts(this, that, color, plot_flag)
 
 overlap_fraction=nan(size(this,1),1);
 overlap_num=zeros(size(this,1),1);
@@ -93,6 +97,8 @@ for idx_this=1:size(this,1)
   end
   [x0p,y0p]=polysplit(x0p,y0p);
   overlap_fraction(idx_this) = sum(cellfun(@(x,y) (ispolycw(x,y)*2-1)*polyarea(x,y), x0p,y0p)) / polyarea(x0,y0);
-  c=[0 0 0];  c(color)=max(0,overlap_fraction(idx_this));
-  line(this(idx_this,[1 2 2 1 1]),this(idx_this,[3 3 4 4 3]),'color',c,'linewidth',2);
+  if(plot_flag)
+    c=[0 0 0];  c(color)=max(0,overlap_fraction(idx_this));
+    line(this(idx_this,[1 2 2 1 1]),this(idx_this,[3 3 4 4 3]),'color',c,'linewidth',2);
+  end
 end
