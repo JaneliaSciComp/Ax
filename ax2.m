@@ -6,8 +6,7 @@
 %
 % extract contours from a set of spectrograms by first convolving hot pixels
 % with a square box, then finding contiguous pixels, and finally discarding those
-% with small areas.  optionally merge contours that are harmonically related or
-% overlapped in time.
+% with small areas.  optionally merge contours that are harmonically related.
 %
 % typical usage consists of three spectrograms made with three different FFT
 % window sizes.  a single common image is constructed using the smallest temporal
@@ -32,7 +31,6 @@
 %       of the hot pixel in each time slice with the max amplitude
 %   fc2: a cell array (vocs) of cell arrays (syls) of Nx4 arrays (time[s], freq[Hz], amplitude, channel)
 %       of all hot pixels
-%   fh: a cell array (vocalizations) of cell arrays (syllables) of spectral purity quotients
 %   params: a .m file of the parameters used
 %
 % for ultrasonic:
@@ -217,7 +215,6 @@ CHUNK_TIME_WINDOWS=round(CHUNK_TIME_SEC*FS/(maxNFFT/2))*maxNFFT./[data.NFFT];  %
 skytruth=[];
 freq_contours={};
 freq_contours2={};
-freq_histograms={};
 voc_num=1;
 hit_num=1;
 miss_num=1;
@@ -338,10 +335,9 @@ while ~eof
     syls.PixelIdxList=syls.PixelIdxList(tmp);
     syls.NumObjects=length(tmp);
 
-    %calculate frequency contours (and histograms)
+    %calculate frequency contours
     freq_contour={};
     freq_contour2={};
-    freq_histogram={};
     for i=1:length(syls2)
       tmp=[];
       for j=1:length(data)
@@ -363,16 +359,13 @@ while ~eof
       tmp=sortrows(tmp);
       freq_contour{i}{1}=zeros(length(unique(tmp(:,1))),3);
       freq_contour2{i}{1}=tmp;
-      pooh=[];
       j=1;  l=1;
       while(j<=size(tmp,1))
         k=j+1;  while((k<=size(tmp,1)) && (tmp(j,1)==tmp(k,1)))  k=k+1;  end
         [~, idx]=max(tmp(j:(k-1),3));
         freq_contour{i}{1}(l,:)=tmp(j+idx-1,1:3);
-        pooh=[pooh; tmp(j:(k-1),2)-tmp(j+idx-1,2)];
         j=k;  l=l+1;
       end
-      freq_histogram{i}{1}=sum(pooh==0)/length(pooh);
     end
 
     %merge harmonically related syllables
@@ -425,8 +418,6 @@ while ~eof
               freq_contour{j}=[];
               freq_contour2{i}={freq_contour2{i}{1:(tmp-1)} freq_contour2{j}{:} freq_contour2{i}{tmp:end}};
               freq_contour2{j}=[];
-              freq_histogram{i}=[freq_histogram{i}(1:(tmp-1)) freq_histogram{j}{:} freq_histogram{i}(tmp:end)];
-              freq_histogram{j}=[];
             end
           end
         end
@@ -437,7 +428,6 @@ while ~eof
       syls2=regionprops(syls,'basic');
       freq_contour={freq_contour{idx}};
       freq_contour2={freq_contour2{idx}};
-      freq_histogram={freq_histogram{idx}};
     end
 
     %cull short vocalizations
@@ -449,7 +439,6 @@ while ~eof
       syls2=regionprops(syls,'basic');
       freq_contour={freq_contour{idx}};
       freq_contour2={freq_contour2{idx}};
-      freq_histogram={freq_histogram{idx}};
     end
     tmp=reshape([syls2.BoundingBox],4,length(syls2))';
     %tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
@@ -462,7 +451,6 @@ while ~eof
         [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+FREQUENCY_LOW];
     freq_contours={freq_contours{:} freq_contour{:}};
     freq_contours2={freq_contours2{:} freq_contour2{:}};
-    freq_histograms={freq_histograms{:} freq_histogram{:}};
 
     %plot
     if(SAVE_WAV || SAVE_PNG)
@@ -519,7 +507,6 @@ tmp=[skytruth(:,1:2) skytruth(:,4:5)];
 save(fullfile(directory,'voc.txt'),'tmp','-ascii');
 save(fullfile(directory,'fc'),'freq_contours');
 save(fullfile(directory,'fc2'),'freq_contours2');
-save(fullfile(directory,'fh'),'freq_histograms');
 
 varname=@(x) inputname(1);
 %fid=fopen(fullfile(directory,['params' sprintf('%d',CHANNELS) '.m']),'w');
