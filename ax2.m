@@ -43,7 +43,7 @@
 %     1:4, '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 % ax2('rejection_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
 
-function directory=ax2(varargin)
+function ax2(varargin)
 
 switch nargin
   case 2
@@ -138,7 +138,6 @@ if(~isempty(tmp))
       end
     end
   end
-  directory=[];
   parfor i=1:length(datafiles)
 %   for i=1:length(datafiles)
     ax2_guts(i, frequency_low, frequency_high, convolution_size, minimum_object_area, ...
@@ -155,7 +154,7 @@ if(~isempty(tmp))
 else
   tmp=dir([data_path '*.ax']);
   if(~isempty(tmp))
-    directory=ax2_guts(0, frequency_low, frequency_high, convolution_size, minimum_object_area, ...
+    ax2_guts(0, frequency_low, frequency_high, convolution_size, minimum_object_area, ...
         merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
         minimum_vocalization_length, channels, data_path);
   else
@@ -164,7 +163,7 @@ else
 end
 
 
-function directory=ax2_guts(num, FREQUENCY_LOW, FREQUENCY_HIGH, CONVOLUTION_SIZE, MINIMUM_OBJECT_AREA, ...
+function ax2_guts(num, FREQUENCY_LOW, FREQUENCY_HIGH, CONVOLUTION_SIZE, MINIMUM_OBJECT_AREA, ...
     MERGE_HARMONICS, MERGE_HARMONICS_OVERLAP, MERGE_HARMONICS_RATIO, MERGE_HARMONICS_FRACTION, ...
     MINIMUM_VOCALIZATION_LENGTH, CHANNELS, filename)
 
@@ -223,10 +222,6 @@ CHUNK_FILE=1024;
 CONVOLUTION_SIZE_PIX=round(CONVOLUTION_SIZE ./ [df minNFFT/FS/2]);
 CONVOLUTION_SIZE_PIX=round(2*(0.5+floor(CONVOLUTION_SIZE_PIX/2)));  % ceil to odd
 MINIMUM_OBJECT_AREA_PIX=MINIMUM_OBJECT_AREA/df/(minNFFT/FS/2);
-
-[p,n,e]=fileparts(filename);
-directory=fullfile(p,[n '-out' datestr(now,30)]);
-mkdir(directory);
 
 tic;
 eof=false;  count=4*CHUNK_FILE;
@@ -486,7 +481,7 @@ while ~eof
       while voc_num<=min([200 size(skytruth,1)])
         left=skytruth(voc_num,1);
         right=skytruth(voc_num,2);
-        ax2_print(voc_num,left,right,'voc',filename,directory,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
+        ax2_print(voc_num,left,right,'voc',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
         voc_num=voc_num+1;
       end
     end
@@ -504,13 +499,13 @@ end
 disp([num2str(num) ': ' num2str(size(skytruth,1)) ' automatically segmented vocalizations']);
 
 tmp=[skytruth(:,1:2) skytruth(:,4:5)];
-save(fullfile(directory,'voc.txt'),'tmp','-ascii');
-save(fullfile(directory,'fc'),'freq_contours');
-save(fullfile(directory,'fc2'),'freq_contours2');
+save([filename '.voc'],'tmp','-ascii');
+save([filename '.fc'],'freq_contours');
+save([filename '.fc2'],'freq_contours2');
 
 varname=@(x) inputname(1);
 %fid=fopen(fullfile(directory,['params' sprintf('%d',CHANNELS) '.m']),'w');
-fid=fopen(fullfile(directory,'params.m'),'w');
+fid=fopen([filename '.params'],'w');
 for i=1:length(data)
   jj=fieldnames(data(i));
   for j=1:length(jj)-2
@@ -523,14 +518,15 @@ if ispc
   [s,VERSION_AX]=system('"c:\\Program Files (x86)\Git\bin\git" log -1 --pretty=format:"%ci %H"');
 else
   [s,VERSION_AX]=system('TERM=xterm git log -1 --pretty=format:"#%ci %H#"');
-  strfind(VERSION_AX,'#');
-  VERSION_AX=VERSION_AX((ans(1)+1):(ans(2)-1));
+  tmp=strfind(VERSION_AX,'#');
+  VERSION_AX=VERSION_AX((tmp(1)+1):(tmp(2)-1));
 end
 if s
     warning('cant''t find git.  to save version info, git-bash must be installed.');
 end
 
 fprintf(fid,'VERSION_AX=''%s'';\n',VERSION_AX);
+fprintf(fid,'TIME_STAMP=''%s'';\n',datestr(now,30));
 fprintf(fid,'%s=%g;\n',varname(FREQUENCY_LOW),FREQUENCY_LOW);
 fprintf(fid,'%s=%g;\n',varname(FREQUENCY_HIGH),FREQUENCY_HIGH);
 fprintf(fid,'%s=[%g %g];\n',varname(CONVOLUTION_SIZE),CONVOLUTION_SIZE);
@@ -545,7 +541,7 @@ fclose(fid);
 
 
 
-function ax2_print(i,left,right,type,filename,directory,FS,NFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS)
+function ax2_print(i,left,right,type,filename,FS,NFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS)
 
 if isempty(CHANNELS)
   d=dir([filename '.ch*']);
@@ -563,7 +559,7 @@ for j=CHANNELS
   if(SAVE_WAV)
     tmp2=filtfilt(b,a,tmp);
     tmp2=tmp2./max([max(tmp2)-min(tmp2)]);
-    wavwrite(tmp2,22000,[directory '/' type num2str(i) '.ch' num2str(j) '.wav']);
+    wavwrite(tmp2,22000,[type num2str(i) '.ch' num2str(j) '.wav']);
   end
   [s,f,t,p(j,:,:)]=spectrogram(tmp,NFFT,[],[],FS,'yaxis');
 end
@@ -581,5 +577,5 @@ axis tight;
 set(gca,'xlim',[left right]+[-0.025 0.025]);
 title([type ' #' num2str(i)]);
 drawnow;
-if(SAVE_PNG)  print('-dpng',[directory '/' type num2str(i) '.png']);  end
+if(SAVE_PNG)  print('-dpng',[type num2str(i) '.png']);  end
 delete(h);
