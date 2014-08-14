@@ -1,33 +1,33 @@
-% function ax1(params_file,FILEIN,FILEOUT)
-% function ax1(params_file,FILEIN,FILEOUT,START,STOP)
-% function ax1(FS,NFFT,NW,K,PVAL,FILEIN,FILEOUT)
-% function ax1(FS,NFFT,NW,K,PVAL,FILEIN,FILEOUT,START,STOP)
+% function ax1(params_file,FILENAME,SUFFIX)
+% function ax1(params_file,FILENAME,SUFFIX,START,STOP)
+% function ax1(FS,NFFT,NW,K,PVAL,FILENAME,SUFFIX)
+% function ax1(FS,NFFT,NW,K,PVAL,FILENAME,SUFFIX,START,STOP)
 %
 % analyze a set of time series with multi-taper spectral analysis and
 % create a sparse matrix of just the time-frequency pixels whose F-test
 % passes PVAL.
 %
-% typical usage consists of one or more input files being analyzed by one
+% typical usage consists of one or more microphones being analyzed by one
 % or more parameter sets.  for example, four microphone recordings of the
 % same vocalizing mouse analyzed with three different NFFTs and the same
-% NW, K, and PVAL.  <filename>.ch[1-4] yield <filename>-[1-3].ax
+% NW, K, and PVAL.  e.g. <filename>.wav yields <filename>-[1-3].ax
 %
 % FS: sampling rate in Hertz
 % NFFT: FFT window size in seconds, rounds up to the next power of 2 tics
 % NW: multi-taper time-bandwidth product
 % K: number of tapers
 % PVAL: F-test p-val threshold
-% FILEIN: the path and base filename of a single .wav file containing all channels, or
-%   of .ch[0-9] files each with a single channel of float32s
-% FILEOUT: an integer to append to FILEIN to differentiate parameter sets used
+% FILENAME: the full path to a single .wav file containing all channels,
+%   or of .ch[0-9] files each with a single channel of float32s
+% SUFFIX: a string to append to FILEIN to differentiate parameter sets used
 % START,STOP: optional time range, in seconds
 %
 % output is a binary file with a time x frequency x amplitude x channel
 %     array of hot pixels
 %
-% ax1('ultrasonic_params','urine','1');
-% ax1(200e3,0.001,15,29,0.01,'urine','1');
-% ax1(450450,0.001,15,29,0.01,0,30,'groundtruth','1');
+% ax1('./ultrasonic_params','~/urine','1');
+% ax1(200e3,0.001,15,29,0.01,'~/urine','1');
+% ax1(450450,0.001,15,29,0.01,'~/groundtruth','1',0,60);
 
 function ax1(varargin)
 
@@ -51,16 +51,16 @@ if(nargin<6)
   fid=fopen(varargin{1},'r');
   eval(fread(fid,'*char')');
   fclose(fid);
-  FILEIN=varargin{2};
-  FILEOUT=varargin{3};
+  FILENAME=varargin{2};
+  SUFFIX=varargin{3};
 else
   FS=varargin{1};
   NFFT=varargin{2};
   NW=varargin{3};
   K=varargin{4};
   PVAL=varargin{5};
-  FILEIN=varargin{6};
-  FILEOUT=varargin{7};
+  FILENAME=varargin{6};
+  SUFFIX=varargin{7};
 end
 if((nargin==5)||(nargin==9))
   START=varargin{end-1};
@@ -103,14 +103,15 @@ df=f(2)-f(1);
 
 sig=finv(1-PVAL/NFFT,2,2*K-2); % F-distribution based 1-p% point
 
-if(exist([FILEIN '.wav'])==2)
-  FILETYPE='wav';
+[FILEPATH,tmp,FILETYPE]=fileparts(FILENAME);
+FILENAME=fullfile(FILEPATH,tmp);
+if(exist([FILENAME FILETYPE])==2)
   FILEPATH='';
-  FILEINs=[];
+  FILENAMES=[];
   try
-    info=audioinfo([FILEIN '.wav']);
+    info=audioinfo([FILENAME FILETYPE]);
   catch
-    error(['can''t open file ''' FILEIN '''']);
+    error(['can''t open file ''' FILENAME '''']);
   end
   FILELEN_TIC=info.TotalSamples;
   NCHANNELS=info.NumChannels;
@@ -121,15 +122,14 @@ if(exist([FILEIN '.wav'])==2)
   end
   REMAP=1:NCHANNELS;
 else
-  FILETYPE='ch';
-  [FILEPATH n e]=fileparts(FILEIN);
-  FILEINs=dir([FILEIN '.ch*']);
-  NCHANNELS=length(FILEINs);
+  FILETYPE='.ch';
+  FILENAMES=dir([FILENAME '.ch*']);
+  NCHANNELS=length(FILENAMES);
   if(NCHANNELS==0)
-    error(['can''t find any .ch files with basename ' FILEIN]);
+    error(['can''t find any .ch files with basename ' FILENAME]);
   end
   for i=1:NCHANNELS
-    filei=fullfile(FILEPATH,FILEINs(i).name);
+    filei=fullfile(FILEPATH,FILENAMES(i).name);
     fid=fopen(filei,'r');
     if(fid==-1)
       error(['can''t open file ''' filei '''']);
@@ -138,7 +138,7 @@ else
     ftell(fid)/4;
     if((i>1)&&(ans~=FILELEN_TIC))  error('not all file lengths are the same');  end
     FILELEN_TIC=ans;
-    REMAP(i)=str2num(FILEINs(i).name(end));
+    REMAP(i)=str2num(FILENAMES(i).name(end));
     fclose(fid);
   end    
 end
@@ -153,9 +153,9 @@ else
 end
 tmp=round((STOP_TIC-START_TIC)/(NFFT/2)-1);
 disp(['Processing ' num2str(NCHANNELS) ' channels x ' num2str((STOP_TIC-START_TIC)/FS/60,3) ' min = ' num2str(tmp) ...
-    ' windows = ' num2str(tmp/NWINDOWS_PER_WORKER,3) ' chunks of data in ' FILEIN '.' FILETYPE]);
+    ' windows = ' num2str(tmp/NWINDOWS_PER_WORKER,3) ' chunks of data in ' FILENAME FILETYPE]);
 
-fid_out=fopen([FILEIN '-' FILEOUT '.ax'],'w');
+fid_out=fopen([FILENAME '-' SUFFIX '.ax'],'w');
 fwrite(fid_out,uint8([VERSION SUBSAMPLE NWINDOWS_PER_WORKER]),'uint8');  % CHUNK not necessary
 fwrite(fid_out,uint32([FS NFFT]),'uint32');
 fwrite(fid_out,uint16([NW K]),'uint16');
@@ -178,15 +178,15 @@ while(t<STOP_TIC)
     tmp=t+(i-1)*NFFT/2*NWINDOWS_PER_WORKER;
     if(tmp>=STOP_TIC)  continue;  end
     switch FILETYPE
-      case 'ch'
+      case '.ch'
         for j=1:NCHANNELS
-          fid = fopen(fullfile(FILEPATH,FILEINs(j).name),'r');
+          fid = fopen(fullfile(FILEPATH,FILENAMES(j).name),'r');
           fseek(fid,tmp*4,-1);
           dd(:,j) = fread(fid, NSAMPLES, 'float32', 4*(SUBSAMPLE-1));
           fclose(fid);
         end
-      case 'wav'
-        dd=audioread([FILEIN '.wav'],[tmp+1 min(tmp+NSAMPLES, FILELEN_TIC)]);
+      case {'.wav','.WAV'}
+        dd=audioread([FILENAME FILETYPE],[tmp+1 min(tmp+NSAMPLES, FILELEN_TIC)]);
     end
     dd=single(dd);
     if(size(dd,1)<NSAMPLES)
