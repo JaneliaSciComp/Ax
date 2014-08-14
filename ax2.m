@@ -120,7 +120,7 @@ if (isempty(minimum_vocalization_length) || (minimum_vocalization_length<0))
   warndlg('minimum_vocalization_length must be a non-negative real number');
 end
 
-tmp=dir(fullfile(data_path,'*.ax'));
+tmp=dir(fullfile(data_path,'-*.ax'));
 if(~isempty(tmp))
   datafiles=cell(1,length(tmp));
   for i=1:length(tmp)
@@ -152,7 +152,7 @@ if(~isempty(tmp))
     end
   end
 else
-  tmp=dir([data_path '*.ax']);
+  tmp=dir([data_path '-*.ax']);
   if(~isempty(tmp))
     ax2_guts(0, frequency_low, frequency_high, convolution_size, minimum_object_area, ...
         merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
@@ -180,7 +180,7 @@ end
 
 %load header
 disp([num2str(num) ': ' 'processing file ' filename]);
-tmp=dir([filename,'*.ax']);
+tmp=dir([filename,'-*.ax']);
 for i=1:length(tmp)
   disp([num2str(num) ': loading ' tmp(i).name]);
   fid(i)=fopen(fullfile(fileparts(filename),tmp(i).name));
