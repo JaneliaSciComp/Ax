@@ -195,7 +195,7 @@ for i=1:length(tmp)
   data(i).NW=fread(fid(i),1,'uint16');
   data(i).K=fread(fid(i),1,'uint16');
   data(i).PVAL=fread(fid(i),1,'double');
-  data(i).df=fread(fid(i),1,'double');
+  fread(fid(i),1,'double');  % skip deltaFreq
   len=ftell(fid(i));
   fseek(fid(i),-1,'eof');
   if(~strcmp(char(fread(fid(i),1,'uchar')),'Z'))
@@ -205,7 +205,7 @@ for i=1:length(tmp)
 end
 [~,idx]=sort([data.NFFT]);  data=data(idx);  fid=fid(idx);
 
-df=min([data.df])/10;
+deltaFreq=min([data.FS]./[data.NFFT])/10;
 minNFFT=min([data.NFFT]);
 maxNFFT=max([data.NFFT]);
 FS=data(1).FS;
@@ -219,9 +219,9 @@ hit_num=1;
 miss_num=1;
 fa_num=1;
 CHUNK_FILE=1024;
-CONVOLUTION_SIZE_PIX=round(CONVOLUTION_SIZE ./ [df minNFFT/FS/2]);
+CONVOLUTION_SIZE_PIX=round(CONVOLUTION_SIZE ./ [deltaFreq minNFFT/FS/2]);
 CONVOLUTION_SIZE_PIX=round(2*(0.5+floor(CONVOLUTION_SIZE_PIX/2)));  % ceil to odd
-MINIMUM_OBJECT_AREA_PIX=MINIMUM_OBJECT_AREA/df/(minNFFT/FS/2);
+MINIMUM_OBJECT_AREA_PIX=MINIMUM_OBJECT_AREA/deltaFreq/(minNFFT/FS/2);
 
 tic;
 eof=false;  count=4*CHUNK_FILE;
@@ -253,7 +253,7 @@ while ~eof
     end
   end
 
-  sizeF=ceil(FREQUENCY_HIGH/df)-floor(FREQUENCY_LOW/df)+2*floor(maxNFFT/minNFFT/2)+1;
+  sizeF=ceil(FREQUENCY_HIGH/deltaFreq)-floor(FREQUENCY_LOW/deltaFreq)+2*floor(maxNFFT/minNFFT/2)+1;
   sizeT=CHUNK_TIME_WINDOWS(1)+2*floor(maxNFFT/minNFFT/2)+1;
   %skip this chunk if no hot pixels
   if(~all(arrayfun(@(x) isempty(x.MT_next), data)))
@@ -267,7 +267,7 @@ while ~eof
       for i=(-floor(tmpF/2):floor(tmpF/2))+floor(maxNFFT/minNFFT/2)+1
         for n=(-floor(tmpT/2):floor(tmpT/2))+floor(maxNFFT/minNFFT/2)+1
           im_next(sub2ind([sizeF,sizeT],...
-              round(data(k).MT_next(:,2)/df)+i-floor(FREQUENCY_LOW/df), ...
+              round(data(k).MT_next(:,2)/deltaFreq)+i-floor(FREQUENCY_LOW/deltaFreq), ...
               tmpT*data(k).MT_next(:,1)+n))=true;
         end
       end
@@ -340,10 +340,10 @@ while ~eof
         tmpT=data(j).NFFT/minNFFT;
   %      idx=find(((tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2-floor(tmpT/2))>=syls2(i).BoundingBox(1)) & ...
   %               ((tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2+floor(tmpT/2))<=sum(syls2(i).BoundingBox([1 3]))) & ...
-  %                (data(j).MT(:,2)>=(syls2(i).BoundingBox(2)*df+F_LOW)) & ...
-  %                (data(j).MT(:,2)<=(sum(syls2(i).BoundingBox([2 4]))*df+F_LOW)));
+  %                (data(j).MT(:,2)>=(syls2(i).BoundingBox(2)*deltaFreq+F_LOW)) & ...
+  %                (data(j).MT(:,2)<=(sum(syls2(i).BoundingBox([2 4]))*deltaFreq+F_LOW)));
         foo=[tmpT*data(j).MT(:,1)+floor(maxNFFT/minNFFT/2)+1+(CONVOLUTION_SIZE_PIX(2)-1)/2 ...
-             round(data(j).MT(:,2)/df)-floor(FREQUENCY_LOW/df)+floor(maxNFFT/minNFFT/2)+1];
+             round(data(j).MT(:,2)/deltaFreq)-floor(FREQUENCY_LOW/deltaFreq)+floor(maxNFFT/minNFFT/2)+1];
         [r c]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
         idx=ismember(foo,[c r],'rows');
         foo=data(j).MT(idx,1:4);
@@ -443,7 +443,7 @@ while ~eof
     skytruth=[skytruth; ...
         ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1))*minNFFT/2/FS ...
         zeros(size(tmp,1),1) ...
-        [tmp(:,2) tmp(:,2)+tmp(:,4)].*df+FREQUENCY_LOW];
+        [tmp(:,2) tmp(:,2)+tmp(:,4)].*deltaFreq+FREQUENCY_LOW];
     freq_contours={freq_contours{:} freq_contour{:}};
     freq_contours2={freq_contours2{:} freq_contour2{:}};
 
@@ -455,7 +455,7 @@ while ~eof
       c=c-(CONVOLUTION_SIZE_PIX(2)-1)/2+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1);
       c=c-floor(maxNFFT/minNFFT/2)-1;
       r=r-floor(maxNFFT/minNFFT/2)-1;
-      plot(c.*(minNFFT/2)./FS,r.*df+FREQUENCY_LOW,'bo');
+      plot(c.*(minNFFT/2)./FS,r.*deltaFreq+FREQUENCY_LOW,'bo');
 
       for i=1:length(syls2)
         for j=1:length(freq_contours{end-i+1})
