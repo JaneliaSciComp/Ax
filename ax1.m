@@ -13,7 +13,7 @@
 % NW, K, and PVAL.  e.g. <filename>.wav yields <filename>-[1-3].ax
 %
 % FS: sampling rate in Hertz
-% NFFT: FFT window size in seconds, rounds up to the next power of 2 tics
+% NFFT: FFT window size in tics.  a power of 2 is advised
 % NW: multi-taper time-bandwidth product
 % K: number of tapers
 % PVAL: F-test p-val threshold
@@ -93,7 +93,14 @@ if(NWORKERS==0)  NWORKERS=1;  end
 
 FS=FS/SUBSAMPLE;
 
-NFFT=2^nextpow2(NFFT*FS);  % convert to ticks
+log2(NFFT);
+if(abs(ans-round(ans))>eps(ans))
+  warning('ax1 will be faster if NFFT is a power of 2');
+end
+NFFT/2;
+if(abs(ans-round(ans))>eps(ans))
+  error('NFFT must be even');
+end
 NWINDOWS_PER_WORKER=round(12*256*1000/NFFT);  % NFFT/2 ticks
 
 [tapers,eigs]=dpss(NFFT,NW,K);
