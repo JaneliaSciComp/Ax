@@ -181,29 +181,48 @@ end
 %load header
 disp([num2str(num) ': ' 'processing file ' filename]);
 tmp=dir([filename,'-*.ax']);
-for i=1:length(tmp)
-  disp([num2str(num) ': loading ' tmp(i).name]);
-  fid(i)=fopen(fullfile(fileparts(filename),tmp(i).name));
-  data(i).VERSION_FILE_FORMAT=fread(fid(i),1,'uint8');
-  data(i).SUBSAMPLE=fread(fid(i),1,'uint8');
-  data(i).CHUNK=fread(fid(i),1,'uint8');
-  data(i).FS=fread(fid(i),1,'uint32');
+filenames={tmp.name};
+for i=1:length(filenames)
+  disp([num2str(num) ': loading ' filenames{i}]);
+  try
+    hdf5=1;
+    tmp2=h5info(fullfile(fileparts(filename),filenames{i}),'/hotPixels');
+    for j=1:length(tmp2.Attributes)
+      data(i).(tmp2.Attributes(j).Name)=tmp2.Attributes(j).Value;
+    end
+    flen(i)=tmp2.Dataspace.Size(1);
+    fptr(i)=1;
+  catch
+    hdf5=0;
+    fid(i)=fopen(fullfile(fileparts(filename),filenames{i}));
+    data(i).VERSION_FILE_FORMAT=fread(fid(i),1,'uint8');
+    data(i).SUBSAMPLE=fread(fid(i),1,'uint8');
+    data(i).CHUNK=fread(fid(i),1,'uint8');
+    data(i).FS=fread(fid(i),1,'uint32');
+    data(i).NFFT=fread(fid(i),1,'uint32');
+    data(i).NW=fread(fid(i),1,'uint16');
+    data(i).K=fread(fid(i),1,'uint16');
+    data(i).PVAL=fread(fid(i),1,'double');
+    fread(fid(i),1,'double');  % skip deltaFreq
+    len=ftell(fid(i));
+    fseek(fid(i),-1,'eof');
+    if(~strcmp(char(fread(fid(i),1,'uchar')),'Z'))
+      error('end of file marker missing.  file corrupt');
+    end
+    fseek(fid(i),len,'bof');
+  end
   if((i>1) && (data(i).FS~=data(1).FS))
     error('sampling frequencies are not the same');
   end
-  data(i).NFFT=fread(fid(i),1,'uint32');
-  data(i).NW=fread(fid(i),1,'uint16');
-  data(i).K=fread(fid(i),1,'uint16');
-  data(i).PVAL=fread(fid(i),1,'double');
-  fread(fid(i),1,'double');  % skip deltaFreq
-  len=ftell(fid(i));
-  fseek(fid(i),-1,'eof');
-  if(~strcmp(char(fread(fid(i),1,'uchar')),'Z'))
-    error('end of file marker missing.  file corrupt');
-  end
-  fseek(fid(i),len,'bof');
 end
-[~,idx]=sort([data.NFFT]);  data=data(idx);  fid=fid(idx);
+[~,idx]=sort([data.NFFT]);
+data=data(idx);
+filenames=filenames(idx);
+if(hdf5)
+  flen=flen(idx);
+else
+  fid=fid(idx);
+end
 
 deltaFreq=min([data.FS]./[data.NFFT])/10;
 minNFFT=min([data.NFFT]);
@@ -234,12 +253,20 @@ while ~eof
   % read in chunk of data
   for i=1:length(data)
     tmp=[];  data(i).MT_next=[];
-    while ~feof(fid(i))
-      [foo,count(i)]=fread(fid(i),[4 CHUNK_FILE],'double');
+    while (hdf5 && fptr(i)<=flen(i)) || ((~hdf5) && (~feof(fid(i))))
+      if(hdf5)
+        count(i)=min(flen(i)-fptr(i)+1, CHUNK_FILE);
+        foo=h5read(fullfile(fileparts(filename),filenames{i}),'/hotPixels',[fptr(i) 1],[count(i) 4]);
+        fptr(i)=fptr(i)+count(i);
+        count(i)=count(i)*4;
+      else
+        [foo,count(i)]=fread(fid(i),[4 CHUNK_FILE],'double');
+        foo=foo';
+      end
       if(isempty(foo))  continue;  end
-      tmp=[tmp; foo'];
+      tmp=[tmp; foo];
       idx=find(tmp(:,1)>chunk_curr*CHUNK_TIME_WINDOWS(i),1);
-      if(feof(fid(i)) && isempty(idx))
+      if(((hdf5 && fptr(i)>flen(i)) || ((~hdf5) && feof(fid(i)))) && isempty(idx))
         idx=size(tmp,1)+1;
       end
       if(~isempty(idx))
@@ -247,7 +274,11 @@ while ~eof
             (isempty(CHANNELS) | ismember(tmp(1:(idx-1),4),CHANNELS)));
         data(i).MT_next=tmp(idx2,:);
         data(i).MT_next(:,1)=data(i).MT_next(:,1)-(chunk_curr-1)*CHUNK_TIME_WINDOWS(i);
-        fseek(fid(i),-(size(tmp,1)-idx+1)*4*8,'cof');
+        if(hdf5)
+          fptr(i)=fptr(i)-(size(tmp,1)-idx+1);
+        else
+          fseek(fid(i),-(size(tmp,1)-idx+1)*4*8,'cof');
+        end
         break;
       end
     end
@@ -509,23 +540,18 @@ fid=fopen([filename '.params'],'w');
 for i=1:length(data)
   jj=fieldnames(data(i));
   for j=1:length(jj)-2
-    fprintf(fid,'%s=%g;\n',char(jj(j)),data(i).(char(jj(j))));
+    if(isnumeric(data(i).(char(jj(j)))))
+      fprintf(fid,'%s=%g;\n',char(jj(j)),data(i).(char(jj(j))));
+    else
+      fprintf(fid,'%s=%s;\n',char(jj(j)),data(i).(char(jj(j))));
+    end
   end
   fprintf(fid,'\n');
 end
 
-if ispc
-  [s,VERSION_AX]=system('"c:\\Program Files (x86)\Git\bin\git" log -1 --pretty=format:"%ci %H"');
-else
-  [s,VERSION_AX]=system('TERM=xterm git log -1 --pretty=format:"#%ci %H#"');
-  tmp=strfind(VERSION_AX,'#');
-  VERSION_AX=VERSION_AX((tmp(1)+1):(tmp(2)-1));
-end
-if s
-    warning('cant''t find git.  to save version info, git-bash must be installed.');
-end
+VERSION=get_version();
 
-fprintf(fid,'VERSION_AX=''%s'';\n',VERSION_AX);
+fprintf(fid,'VERSION=''%s'';\n',VERSION);
 fprintf(fid,'TIME_STAMP=''%s'';\n',datestr(now,30));
 fprintf(fid,'%s=%g;\n',varname(FREQUENCY_LOW),FREQUENCY_LOW);
 fprintf(fid,'%s=%g;\n',varname(FREQUENCY_HIGH),FREQUENCY_HIGH);

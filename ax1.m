@@ -81,7 +81,14 @@ if(length(NFFT)>1)
   error('multiple NFFTs not supported when calling ax1() from the matlab command line');
 end
 
-VERSION=1;
+use_hdf5=1;
+
+if(use_hdf5)
+  VERSION=get_version();
+  TIMESTAMP=datestr(now,30);
+else
+  VERSION=1;
+end
 
 SUBSAMPLE=1;
 NWORKERS=0;
@@ -162,12 +169,31 @@ tmp=round((STOP_TIC-START_TIC)/(NFFT/2)-1);
 disp(['Processing ' num2str(NCHANNELS) ' channels x ' num2str((STOP_TIC-START_TIC)/FS/60,3) ' min = ' num2str(tmp) ...
     ' windows = ' num2str(tmp/NWINDOWS_PER_WORKER,3) ' chunks of data in ' FILENAME FILETYPE]);
 
-fid_out=fopen([FILENAME '-' SUFFIX '.ax'],'w');
-fwrite(fid_out,uint8([VERSION SUBSAMPLE NWINDOWS_PER_WORKER]),'uint8');  % CHUNK not necessary
-fwrite(fid_out,uint32([FS NFFT]),'uint32');
-fwrite(fid_out,uint16([NW K]),'uint16');
-fwrite(fid_out,[PVAL df],'double');
+if(use_hdf5)
+  if(exist([FILENAME '-' SUFFIX '.ax'],'file'))  delete([FILENAME '-' SUFFIX '.ax']);  end
+  h5create([FILENAME '-' SUFFIX '.ax'],'/hotPixels',[Inf 4],'ChunkSize',[1024 4]);
+  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','VERSION',VERSION);
+  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','TIMESTAMP',TIMESTAMP);
+  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','FS',FS);
+  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','NFFT',NFFT);
+  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','NW',NW);
+  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','K',K);
+  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','PVAL',PVAL);
+  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','FILENAME',FILENAME);
+  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','SUFFIX',SUFFIX);
+  if(exist('START'))  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','START',START);  end
+  if(exist('STOP'))   h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','STOP',STOP);    end
+  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','NWORKERS',NWORKERS);
+  h5writeatt([FILENAME '-' SUFFIX '.ax'],'/hotPixels','NWINDOWS_PER_WORKER',NWINDOWS_PER_WORKER);
+else
+  fid_out=fopen([FILENAME '-' SUFFIX '.ax'],'w');
+  fwrite(fid_out,uint8([VERSION SUBSAMPLE NWINDOWS_PER_WORKER]),'uint8');  % CHUNK not necessary
+  fwrite(fid_out,uint32([FS NFFT]),'uint32');
+  fwrite(fid_out,uint16([NW K]),'uint16');
+  fwrite(fid_out,[PVAL df],'double');
+end
 
+k=1;
 t=START_TIC;
 tic;
 while(t<STOP_TIC)
@@ -207,22 +233,31 @@ while(t<STOP_TIC)
         tmp=1+find(F(2:end-1,l)'>sig);
         for m=1:length(tmp)
           [freq,amp]=brown_puckette(ddd(:,l)',tmp(m),FS);
-          idx{i}{end+1} = [t/(NFFT/2)+(i-1)*NWINDOWS_PER_WORKER+j, freq, amp, l];
+          idx{i}(end+1,:) = [t/(NFFT/2)+(i-1)*NWINDOWS_PER_WORKER+j, freq, amp, l];
         end
       end
     end
   end
-  for i=idx
-    for j=i{1}
-      fwrite(fid_out,[j{1}(1:3) REMAP(j{1}(4))],'double');  % blegh
+  
+  for i=1:length(idx)
+    if(isempty(idx{i}))  continue;  end
+    idx{i}(:,4)=REMAP(idx{i}(:,4));
+    %tmp=[i{1}(:,1:3) REMAP(i{1}(:,4))];
+    if(use_hdf5)
+      h5write([FILENAME '-' SUFFIX '.ax'],'/hotPixels',idx{i},[k 1],size(idx{i}));
+      k=k+size(idx{i},1);
+    else
+      fwrite(fid_out,idx{i}','double');
     end
   end
 
   t = t+NFFT/2*NWINDOWS_PER_WORKER*NWORKERS;
 end
 
-fwrite(fid_out,'Z','uchar');
-fclose(fid_out);
+if(~use_hdf5)
+  fwrite(fid_out,'Z','uchar');
+  fclose(fid_out);
+end
 
 tstop=toc(tstart);
 disp(['Run time was ' num2str(tstop/60,3) ' minutes.']);
@@ -234,6 +269,7 @@ if((exist('parpool')==2) && (length(gcp)>0) && close_it)
     disp('WARNING: could not close parallel pool of workers.  exiting anyway.');
   end
 end
+
 
 
 % from Chronux
