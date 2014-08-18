@@ -540,7 +540,12 @@ fid=fopen([filename '.params'],'w');
 for i=1:length(data)
   jj=fieldnames(data(i));
   for j=1:length(jj)-2
-    if(isnumeric(data(i).(char(jj(j)))))
+    if(strcmp(jj(j),'NFFT'))
+      fprintf(fid,'%s=%g;  %% deltaT=%g secs; deltaF=%g Hz\n',...
+          char(jj(j)),data(i).(char(jj(j))), ...
+          data(i).(char(jj(j))) / data(i).FS, ...
+          data(i).FS / data(i).(char(jj(j))));
+    elseif(isnumeric(data(i).(char(jj(j)))))
       fprintf(fid,'%s=%g;\n',char(jj(j)),data(i).(char(jj(j))));
     else
       fprintf(fid,'%s=%s;\n',char(jj(j)),data(i).(char(jj(j))));
