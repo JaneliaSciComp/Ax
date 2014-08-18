@@ -554,7 +554,7 @@ for i=1:length(data)
   fprintf(fid,'\n');
 end
 
-VERSION=get_version();
+VERSION=get_version('ax2');
 
 fprintf(fid,'VERSION=''%s'';\n',VERSION);
 fprintf(fid,'TIME_STAMP=''%s'';\n',datestr(now,30));

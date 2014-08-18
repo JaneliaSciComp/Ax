@@ -84,7 +84,7 @@ end
 use_hdf5=1;
 
 if(use_hdf5)
-  VERSION=get_version();
+  VERSION=get_version('ax1');
   TIMESTAMP=datestr(now,30);
 else
   VERSION=1;
@@ -130,7 +130,7 @@ if(exist([FILENAME FILETYPE])==2)
   FILELEN_TIC=info.TotalSamples;
   NCHANNELS=info.NumChannels;
   if info.SampleRate~=FS
-    warning(['sampling rates in argument list (' num2str(FS) ') and file (' num2str(info.SampleRate)
+    warning(['sampling rates in argument list (' num2str(FS) ') and file (' num2str(info.SampleRate) ...
         ') do not match;  continuing with ' num2str(info.SampleRate)]);
     FS=info.SampleRate;
   end

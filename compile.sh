@@ -7,6 +7,8 @@
 
 #hard-coded for matlab 2014a on janelia cluster
 
+git log -1 --pretty=format:"%ci %H" > version.txt
+
 mkdir -p ax1
 
 /usr/local/matlab-2014a/bin/mcc -o ax1 \
@@ -18,7 +20,8 @@ mkdir -p ax1
   -w enable:switch_ignored \
   -w enable:missing_lib_sentinel \
   -w enable:demo_license \
-  -v ax1.m
+  -v ax1.m \
+  -a version.txt
 
 mkdir -p ax2
 
@@ -32,4 +35,5 @@ mkdir -p ax2
   -w enable:switch_ignored \
   -w enable:missing_lib_sentinel \
   -w enable:demo_license \
-  -v ax2.m
+  -v ax2.m \
+  -a version.txt
