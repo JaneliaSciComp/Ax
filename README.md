@@ -34,7 +34,7 @@ First, create a text file containing your parameters of choice:
 
     % for ax1()
     FS=450450;
-    NFFT=0.0000625;
+    NFFT=32;
     NW=3;
     K=5;
     PVAL=0.01;
@@ -57,33 +57,33 @@ time-frequency pixels:
 
     >>ax1('parameters.txt','rawdata','1')
 
-Finally, use ax2() to generate rawdata-out\<TIMESTAMP\>/voc.txt, which contains
-a list of bounding boxes:
+Finally, use ax2() to generate rawdata.voc, which contains a list of
+bounding boxes:
 
     >>ax2('parameters.txt','rawdata')
 
 Parameters can also be directly specified as input arguments:
 
-    >>ax1(450450, 0.0000625, 3, 5, 0.01, 'rawdata', '1')
+    >>ax1(450450, 32, 3, 5, 0.01, 'rawdata', '1')
     >>ax2([], 20e3, 120e3, [1300, 0.001], 18.75, 0, 0.9, 0.1, 0.9, 0, 'rawdata')
 
 Time-frequency pixels can be calculated from the same raw data using
 multiple different sets of parameters.  The case below creates rawdata-1.ax,
 rawdata-2.ax, and rawdata-3.ax, each of which uses a different value for NFFT.
 
-    >>ax1(450450, 0.0000625,  3,  5, 0.01 ,'rawdata', '1')
-    >>ax1(450450, 0.000125,   6, 11, 0.01 ,'rawdata', '2')
-    >>ax1(450450, 0.00025,   11, 21, 0.01 ,'rawdata', '3')
+    >>ax1(450450,  32,  3,  5, 0.01 ,'rawdata', '1')
+    >>ax1(450450,  64,  6, 11, 0.01 ,'rawdata', '2')
+    >>ax1(450450, 128, 11, 21, 0.01 ,'rawdata', '3')
 
 Pixels from all .ax files with the specified base file name are combined
 by ax2() to create a single list of bounding boxes.
 
 To test the accuracy first manually annotate the raw data (with
 e.g. [Tempo](https://github.com/JaneliaSciComp/tempo)) to create
-human_voc.txt, and then use groundtruth() to compute Ax's false alarm and
+human.voc, and then use groundtruth() to compute Ax's false alarm and
 miss rate:
 
-    >>[miss, false_alarm, ~, ~, ~]=groundtruth('human_voc.txt', 'rawdata-out<TIMESTAMP>/voc.txt', [])
+    >>[miss, false_alarm, ~, ~, ~]=groundtruth('human.voc', 'rawdata.voc', [])
 
 The parameter space can be searched for the set which minimizes errors
 using the script in optimize_parameters.m (forthcoming).
@@ -98,7 +98,7 @@ Whereas the text file can only contain a single set of parameters when used
 with ax1(), it can contain multiple sets with cluster.sh:
 
     FS=450450;
-    NFFT=[0.00025, 0.000125, 0.0000625];
+    NFFT=[128, 64, 32];
     NW=[11, 6, 3];
     K=[21, 11, 5];
     PVAL=0.01;
