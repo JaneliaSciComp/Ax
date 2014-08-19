@@ -19,15 +19,15 @@
 % PVAL: F-test p-val threshold
 % FILENAME: the full path to a single .wav file containing all channels,
 %   or of .ch[0-9] files each with a single channel of float32s
-% SUFFIX: a string to append to FILEIN to differentiate parameter sets used
+% SUFFIX: a string to append to FILENAME to differentiate parameter sets used
 % START,STOP: optional time range, in seconds
 %
 % output is a binary file with a time x frequency x amplitude x channel
 %     array of hot pixels
 %
 % ax1('./ultrasonic_params','~/urine','1');
-% ax1(200e3,0.001,15,29,0.01,'~/urine','1');
-% ax1(450450,0.001,15,29,0.01,'~/groundtruth','1',0,60);
+% ax1(200e3,32,15,29,0.01,'~/urine','1');
+% ax1(450450,32,15,29,0.01,'~/groundtruth','1',0,60);
 
 function ax1(varargin)
 
@@ -84,7 +84,7 @@ end
 use_hdf5=1;
 
 if(use_hdf5)
-  VERSION=get_version('ax1');
+  VERSION=get_version();
   TIMESTAMP=datestr(now,30);
 else
   VERSION=1;
