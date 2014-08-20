@@ -1,9 +1,9 @@
 #using MAT
 using WAV
-using Debug
+#using Debug
 #using Profile
 using NumericExtensions
-using HDF5, JLD
+using HDF5
 
 require("lock.jl")
 
@@ -22,7 +22,7 @@ function ftest(data::Array{Float32,2}, tapers::Array{Float32,2}, p::Float64)
   data = permutedims(data,(1,3,2))                     # f x 1 x C
   data = broadcast(*, data, tapers2)                   # f x K x C
 
-  # use slow rfft for nowb/c fast plan_rfft is buggy and in flux
+  # use slow rfft for now b/c fast plan_rfft is buggy and in flux
   J = rfft(data,1)                                     # f x K x C
 
   Jp = J[:,Kodd,:]                               # f x K x C
@@ -70,27 +70,26 @@ function brown_puckette(x,k,fs)
 end
 #end #profile
 
-@debug function do_it(params)
+#@debug function do_it(params)
+function do_it(params)
   FILEPATH = params[1]
-  FILEINs = params[2]
-  FILEIN = params[3]
+  FILENAMES = params[2]
+  FILENAME = params[3]
   FILETYPE = params[4]
   FILELEN_TIC = params[5]
   NCHANNELS = params[6]
   t = params[7]
   NWINDOWS_PER_WORKER = params[8]
   NFFT = params[9]
-  NW = params[10]
-  K = params[11]
-  PVAL = params[12]
-  FS = params[13]
-  tapers = params[14]
-  sig = params[15]
+  PVAL = params[10]
+  FS = params[11]
+  tapers = params[12]
+  sig = params[13]
 
   NSAMPLES = (NFFT>>1)*(NWINDOWS_PER_WORKER+1);
   if FILETYPE=="ch"
     for i = 1:NCHANNELS
-      filei=string(FILEPATH,"/",FILEINs[i])
+      filei=string(FILEPATH,"/",FILENAMES[i])
       fid = open(filei,"r")
       seek(fid, t*4)
       tmp2 = read(fid, Float32, min(NSAMPLES, FILELEN_TIC-t))
@@ -100,7 +99,7 @@ end
     end
   else #if FILETYPE=="wav"
     dd, fs, nbits, extra =
-        wavread("$FILEIN.wav"; subrange=(t+1):min(t+NSAMPLES, FILELEN_TIC))
+        wavread("$FILENAME.wav"; subrange=(t+1):min(t+NSAMPLES, FILELEN_TIC))
     dd=float32(dd)
   end
   if (size(dd,1) < NSAMPLES)
@@ -120,6 +119,6 @@ end
       end
     end
   end
-  @printf("done with %.1f\n",t/FS);
-  return idx
+  @printf("done with %.1f sec\n",t/FS);
+  return [x[y] for x in idx, y=1:4]
 end
