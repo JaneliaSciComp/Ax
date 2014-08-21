@@ -32,15 +32,12 @@ Basic Usage
 
 First, create a text file containing your parameters of choice:
 
-    % for ax1()
     FS=450450;
     NFFT=32;
     NW=3;
     K=5;
     PVAL=0.01;
 
-    % for ax2()
-    channels=[];
     frequency_low=20e3;
     frequency_high=120e3;
     convolution_size=[1300, 0.001];
@@ -50,40 +47,45 @@ First, create a text file containing your parameters of choice:
     merge_harmonics_ratio=0.1;
     merge_harmonics_fraction=0.9;
     minimum_vocalization_length=0;
+    channels=[];
 
 Then, given a file named rawdata.wav which contains N time series, use ax1()
-to generate rawdata-1.ax, which contains a sparse matrix of significant
+to generate rawdata-0.ax, which contains a sparse matrix of significant
 time-frequency pixels:
 
-    >>ax1('parameters.txt','rawdata','1')
+    >>ax1('parameters.txt', 'rawdata.wav', '0')
 
 Finally, use ax2() to generate rawdata.voc, which contains a list of
 bounding boxes:
 
-    >>ax2('parameters.txt','rawdata')
+    >>ax2('parameters.txt', {'rawdata-0.ax'}, 'rawdata')
 
 Parameters can also be directly specified as input arguments:
 
-    >>ax1(450450, 32, 3, 5, 0.01, 'rawdata', '1')
-    >>ax2([], 20e3, 120e3, [1300, 0.001], 18.75, 0, 0.9, 0.1, 0.9, 0, 'rawdata')
+    >>ax1(450450, 32, 3, 5, 0.01, 'rawdata.wav', '1')
+    >>ax2(20e3, 120e3, [1300, 0.001], 18.75, 0, 0.9, 0.1, 0.9, 0,...
+        {'rawdata-0.ax'}, 'rawdata')
 
 Time-frequency pixels can be calculated from the same raw data using
-multiple different sets of parameters.  The case below creates rawdata-1.ax,
-rawdata-2.ax, and rawdata-3.ax, each of which uses a different value for NFFT.
+multiple different sets of parameters.  The case below creates rawdata-0.ax,
+rawdata-1.ax, and rawdata-2.ax, each of which uses a different value for NFFT.
 
-    >>ax1(450450,  32,  3,  5, 0.01 ,'rawdata', '1')
-    >>ax1(450450,  64,  6, 11, 0.01 ,'rawdata', '2')
-    >>ax1(450450, 128, 11, 21, 0.01 ,'rawdata', '3')
+    >>ax1(450450,  32,  3,  5, 0.01, 'rawdata.wav', '0')
+    >>ax1(450450,  64,  6, 11, 0.01, 'rawdata.wav', '1')
+    >>ax1(450450, 128, 11, 21, 0.01, 'rawdata.wav', '2')
 
 Pixels from all .ax files with the specified base file name are combined
-by ax2() to create a single list of bounding boxes.
+by ax2() to create a single list of bounding boxes:
+
+    >>ax2(20e3, 120e3, [1300, 0.001], 18.75, 0, 0.9, 0.1, 0.9, 0, ...
+        {'rawdata-0.ax','rawdata-1.ax','rawdata-2.ax'}, 'rawdata')
 
 To test the accuracy first manually annotate the raw data (with
 e.g. [Tempo](https://github.com/JaneliaSciComp/tempo)) to create
 human.voc, and then use groundtruth() to compute Ax's false alarm and
 miss rate:
 
-    >>[miss, false_alarm, ~, ~, ~]=groundtruth('human.voc', 'rawdata.voc', [])
+    >>[miss, false_alarm]=groundtruth('human.voc', 'rawdata.voc', [])
 
 The parameter space can be searched for the set which minimizes errors
 using the script in optimize_parameters.m (forthcoming).
@@ -92,7 +94,7 @@ Jobs can be batched to a cluster of computers which uses the Sun Grid Engine
 scheduler as follows:
 
     %./compile.sh        # this only needs to be done once 
-    %./cluster.sh ./parameters.txt ./rawdata 3
+    %./cluster.sh ./parameters.txt ./rawdata.wav 3
 
 Whereas the text file can only contain a single set of parameters when used
 with ax1(), it can contain multiple sets with cluster.sh:

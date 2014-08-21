@@ -1,8 +1,7 @@
 % function directory=ax2(frequency_low, frequency_high, convolution_size, minimum_object_area, ...
 %     merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
-%     minimum_vocalization_length, ...
-%     channels, data_path)
-% function directory=ax2(params_file, data_path)
+%     minimum_vocalization_length, channels, filenames_in, filename_out)
+% function directory=ax2(params_file, filenames_in, filename_out)
 %
 % extract contours from a set of spectrograms by first convolving hot pixels
 % with a square box, then finding contiguous pixels, and finally discarding those
@@ -23,7 +22,8 @@
 %     merge_harmonics_fraction is the fraction of the overlap that must be within the ratio tolerance
 %   minimum_vocalization_length is the minimum vocalization length in sec
 %   channels is a vector of which channels to use, or [] to use all of them
-%   data_path can be to a folder or to a set of files.  for the latter, omit the .wav suffix
+%   filenames_in is a cell array of full paths to .ax files
+%   filename_out is the full path of the base output filenames, without the extensions
 %
 % four files are output:
 %   voc: an Mx4 array whose columns are the start & stop times (sec), and low & high frequences (Hz)
@@ -33,20 +33,14 @@
 %       of all hot pixels
 %   params: a .m file of the parameters used
 %
-% for ultrasonic:
-% ax2(20e3, 120e3, [15 7], 1500, 0, 0.9, 0.1, 0.9, 0, 1, 0,...
-%     1:4, '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-% ax2('ultrasonic_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-%
-% for rejection:
-% ax2(1e3, 20e3, [15 7], 1000, 0, 0.9, 0.1, 0.9, 0, 3, 0,...
-%     1:4, '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
-% ax2('rejection_params.m', '/groups/egnor/egnorlab/for_ben/sys_test_07052012a/demux/');
+% ax2(20e3, 120e3, [15 7], 1500, 0, 0.9, 0.1, 0.9, 0, 1, 0, [], ...
+%    {'/path/to/data/raw-0.ax','/path/to/data/raw-1.ax','/path/to/data/raw-2.ax'}, '/path/to/data/raw');
+% ax2('./parameters.txt', {'/path/to/data/raw-0.ax','/path/to/data/raw-1.ax'}, '/put/output/over/here');
 
 function ax2(varargin)
 
 switch nargin
-  case 2
+  case 3
 %    run(varargin{1});
     fid = fopen(varargin{1});
     if fid < 0
@@ -60,8 +54,9 @@ switch nargin
     catch ME
         error('Could not load the parameters from %s (%s)', varargin{1}, ME.message);
     end
-    data_path=varargin{2};
-  case 11
+    filenames_in=varargin{2};
+    filename_out=varargin{3};
+  case 12
     frequency_low=varargin{1};
     frequency_high=varargin{2};
     convolution_size=varargin{3};
@@ -72,7 +67,8 @@ switch nargin
     merge_harmonics_fraction=varargin{8};
     minimum_vocalization_length=varargin{9};
     channels=varargin{10};
-    data_path=varargin{11};
+    filenames_in=varargin{11};
+    filename_out=varargin{12};
   otherwise
     error([num2str(nargin) ' args input, either 2 or 11 expected']);
 end
@@ -87,6 +83,8 @@ if(ischar(merge_harmonics_ratio))         merge_harmonics_ratio=str2num(merge_ha
 if(ischar(merge_harmonics_fraction))      merge_harmonics_fraction=str2num(merge_harmonics_fraction);         end
 if(ischar(minimum_vocalization_length))   minimum_vocalization_length=str2num(minimum_vocalization_length);   end
 if(ischar(channels))                      channels=str2num(channels);                                         end
+if(ischar(filenames_in))                  strsplit(filenames_in);    filenames_in={ans{2:end}};               end
+% the above line assumes that filenames & paths have no white space
 
 if(isempty(frequency_low) || isempty(frequency_high) || (frequency_low<0) || (frequency_high<0) || (frequency_low>=frequency_high))
   error('frequency_low should be less than frequency_high and both should be non-negative real numbers');
@@ -120,53 +118,6 @@ if (isempty(minimum_vocalization_length) || (minimum_vocalization_length<0))
   warndlg('minimum_vocalization_length must be a non-negative real number');
 end
 
-tmp=dir(fullfile(data_path,'-*.ax'));
-if(~isempty(tmp))
-  datafiles=cell(1,length(tmp));
-  for i=1:length(tmp)
-    [~,datafiles{i},~]=fileparts(tmp(i).name(1:end-5));
-  end
-  datafiles=unique(datafiles);
-  close_it=0;
-  if(~isdeployed && length(datafiles)>1)
-    if(exist('parpool')==2 && (length(gcp)==0))
-      try
-        parpool;
-        close_it=1;
-      catch
-        disp('WARNING: could not open parallel pool of workers.  proceeding with a single thread.');
-      end
-    end
-  end
-  parfor i=1:length(datafiles)
-%   for i=1:length(datafiles)
-    ax2_guts(i, frequency_low, frequency_high, convolution_size, minimum_object_area, ...
-        merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
-        minimum_vocalization_length, channels, fullfile(data_path, datafiles{i}));
-  end
-  if((exist('parpool')==2) && (length(gcp)==0) && close_it)
-    try
-      delete(gcp('nocreate'));
-    catch
-      disp('WARNING: could not close parallel pool of workers.  exiting anyway.');
-    end
-  end
-else
-  tmp=dir([data_path '-*.ax']);
-  if(~isempty(tmp))
-    ax2_guts(0, frequency_low, frequency_high, convolution_size, minimum_object_area, ...
-        merge_harmonics, merge_harmonics_overlap, merge_harmonics_ratio, merge_harmonics_fraction, ...
-        minimum_vocalization_length, channels, data_path);
-  else
-    error(['can''t find ' data_path]);
-  end
-end
-
-
-function ax2_guts(num, FREQUENCY_LOW, FREQUENCY_HIGH, CONVOLUTION_SIZE, MINIMUM_OBJECT_AREA, ...
-    MERGE_HARMONICS, MERGE_HARMONICS_OVERLAP, MERGE_HARMONICS_RATIO, MERGE_HARMONICS_FRACTION, ...
-    MINIMUM_VOCALIZATION_LENGTH, CHANNELS, filename)
-
 SAVE_WAV=0;
 SAVE_PNG=0;
 
@@ -179,14 +130,11 @@ if(SAVE_WAV || SAVE_PNG)
 end
 
 %load header
-disp([num2str(num) ': ' 'processing file ' filename]);
-tmp=dir([filename,'-*.ax']);
-filenames={tmp.name};
-for i=1:length(filenames)
-  disp([num2str(num) ': loading ' filenames{i}]);
+for i=1:length(filenames_in)
+  disp(['loading ' filenames_in{i}]);
   try
     hdf5=1;
-    tmp2=h5info(fullfile(fileparts(filename),filenames{i}),'/hotPixels');
+    tmp2=h5info(filenames_in{i},'/hotPixels');
     for j=1:length(tmp2.Attributes)
       data(i).(tmp2.Attributes(j).Name)=tmp2.Attributes(j).Value;
     end
@@ -194,7 +142,7 @@ for i=1:length(filenames)
     fptr(i)=1;
   catch
     hdf5=0;
-    fid(i)=fopen(fullfile(fileparts(filename),filenames{i}));
+    fid(i)=fopen(filenames_in{i});
     data(i).VERSION_FILE_FORMAT=fread(fid(i),1,'uint8');
     data(i).SUBSAMPLE=fread(fid(i),1,'uint8');
     data(i).CHUNK=fread(fid(i),1,'uint8');
@@ -217,7 +165,7 @@ for i=1:length(filenames)
 end
 [~,idx]=sort([data.NFFT]);
 data=data(idx);
-filenames=filenames(idx);
+filenames_in=filenames_in(idx);
 if(hdf5)
   flen=flen(idx);
 else
@@ -238,15 +186,15 @@ hit_num=1;
 miss_num=1;
 fa_num=1;
 CHUNK_FILE=1024;
-CONVOLUTION_SIZE_PIX=round(CONVOLUTION_SIZE ./ [deltaFreq minNFFT/FS/2]);
-CONVOLUTION_SIZE_PIX=round(2*(0.5+floor(CONVOLUTION_SIZE_PIX/2)));  % ceil to odd
-MINIMUM_OBJECT_AREA_PIX=MINIMUM_OBJECT_AREA/deltaFreq/(minNFFT/FS/2);
+convolution_size_pix=round(convolution_size ./ [deltaFreq minNFFT/FS/2]);
+convolution_size_pix=round(2*(0.5+floor(convolution_size_pix/2)));  % ceil to odd
+minimum_object_area_pix=minimum_object_area/deltaFreq/(minNFFT/FS/2);
 
 tic;
 eof=false;  count=4*CHUNK_FILE;
 chunk_curr=1;
 while ~eof
-  if(toc>10)  disp([num2str(num) ': ' num2str(chunk_curr*CHUNK_TIME_SEC) ' sec chunk']);  tic;  end;
+  if(toc>10)  disp([num2str(chunk_curr*CHUNK_TIME_SEC) ' sec chunk']);  tic;  end;
 
   eof=(max(count)<4*CHUNK_FILE);
 
@@ -256,7 +204,7 @@ while ~eof
     while (hdf5 && fptr(i)<=flen(i)) || ((~hdf5) && (~feof(fid(i))))
       if(hdf5)
         count(i)=min(flen(i)-fptr(i)+1, CHUNK_FILE);
-        foo=h5read(fullfile(fileparts(filename),filenames{i}),'/hotPixels',[fptr(i) 1],[count(i) 4]);
+        foo=h5read(filenames_in{i},'/hotPixels',[fptr(i) 1],[count(i) 4]);
         fptr(i)=fptr(i)+count(i);
         count(i)=count(i)*4;
       else
@@ -270,8 +218,8 @@ while ~eof
         idx=size(tmp,1)+1;
       end
       if(~isempty(idx))
-        idx2=find((tmp(1:(idx-1),2)>=FREQUENCY_LOW) & (tmp(1:(idx-1),2)<=FREQUENCY_HIGH) & ...
-            (isempty(CHANNELS) | ismember(tmp(1:(idx-1),4),CHANNELS)));
+        idx2=find((tmp(1:(idx-1),2)>=frequency_low) & (tmp(1:(idx-1),2)<=frequency_high) & ...
+            (isempty(channels) | ismember(tmp(1:(idx-1),4),channels)));
         data(i).MT_next=tmp(idx2,:);
         data(i).MT_next(:,1)=data(i).MT_next(:,1)-(chunk_curr-1)*CHUNK_TIME_WINDOWS(i);
         if(hdf5)
@@ -284,7 +232,7 @@ while ~eof
     end
   end
 
-  sizeF=ceil(FREQUENCY_HIGH/deltaFreq)-floor(FREQUENCY_LOW/deltaFreq)+2*floor(maxNFFT/minNFFT/2)+1;
+  sizeF=ceil(frequency_high/deltaFreq)-floor(frequency_low/deltaFreq)+2*floor(maxNFFT/minNFFT/2)+1;
   sizeT=CHUNK_TIME_WINDOWS(1)+2*floor(maxNFFT/minNFFT/2)+1;
   %skip this chunk if no hot pixels
   if(~all(arrayfun(@(x) isempty(x.MT_next), data)))
@@ -298,15 +246,15 @@ while ~eof
       for i=(-floor(tmpF/2):floor(tmpF/2))+floor(maxNFFT/minNFFT/2)+1
         for n=(-floor(tmpT/2):floor(tmpT/2))+floor(maxNFFT/minNFFT/2)+1
           im_next(sub2ind([sizeF,sizeT],...
-              round(data(k).MT_next(:,2)/deltaFreq)+i-floor(FREQUENCY_LOW/deltaFreq), ...
+              round(data(k).MT_next(:,2)/deltaFreq)+i-floor(frequency_low/deltaFreq), ...
               tmpT*data(k).MT_next(:,1)+n))=true;
         end
       end
     end
 
     %convolve
-    im_next=[false(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2) im_next false(sizeF,(CONVOLUTION_SIZE_PIX(2)-1)/2)];
-    im_next=logical(conv2(single(im_next),ones(CONVOLUTION_SIZE_PIX),'same'));
+    im_next=[false(sizeF,(convolution_size_pix(2)-1)/2) im_next false(sizeF,(convolution_size_pix(2)-1)/2)];
+    im_next=logical(conv2(single(im_next),ones(convolution_size_pix),'same'));
 
     %segment
     syls_next=bwconncomp(im_next,8);
@@ -326,11 +274,11 @@ while ~eof
       flag=0;
       for i=1:syls.NumObjects
         [ri ci]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
-        if(sum(ci>=(syls.ImageSize(2)-(CONVOLUTION_SIZE_PIX(2)-1)/2))==0) continue;  end
+        if(sum(ci>=(syls.ImageSize(2)-(convolution_size_pix(2)-1)/2))==0) continue;  end
         j=1;
         while j<=syls_next.NumObjects
           [rj cj]=ind2sub(syls_next.ImageSize,syls_next.PixelIdxList{j});
-          if(sum(cj<=((CONVOLUTION_SIZE_PIX(2)-1)/2))==0)  j=j+1;  continue;  end
+          if(sum(cj<=((convolution_size_pix(2)-1)/2))==0)  j=j+1;  continue;  end
           %if((max(ri) < (min(rj)-1)) || (max(rj) < (min(ri)-1)))  j=j+1;  continue;  end
           %cj=cj+chunk_splits(k+1)-chunk_splits(k);
           cj=cj+CHUNK_TIME_WINDOWS(1);
@@ -356,7 +304,7 @@ while ~eof
 
     %throwout out small blobs
     syls2=regionprops(syls,'basic');
-    tmp=find([syls2.Area]>MINIMUM_OBJECT_AREA_PIX);
+    tmp=find([syls2.Area]>minimum_object_area_pix);
     syls2=syls2(tmp);
     syls.PixelIdxList=syls.PixelIdxList(tmp);
     syls.NumObjects=length(tmp);
@@ -373,8 +321,8 @@ while ~eof
   %               ((tmpT*data(j).MT(:,1)+(CONV_SIZE(2)-1)/2+floor(tmpT/2))<=sum(syls2(i).BoundingBox([1 3]))) & ...
   %                (data(j).MT(:,2)>=(syls2(i).BoundingBox(2)*deltaFreq+F_LOW)) & ...
   %                (data(j).MT(:,2)<=(sum(syls2(i).BoundingBox([2 4]))*deltaFreq+F_LOW)));
-        foo=[tmpT*data(j).MT(:,1)+floor(maxNFFT/minNFFT/2)+1+(CONVOLUTION_SIZE_PIX(2)-1)/2 ...
-             round(data(j).MT(:,2)/deltaFreq)-floor(FREQUENCY_LOW/deltaFreq)+floor(maxNFFT/minNFFT/2)+1];
+        foo=[tmpT*data(j).MT(:,1)+floor(maxNFFT/minNFFT/2)+1+(convolution_size_pix(2)-1)/2 ...
+             round(data(j).MT(:,2)/deltaFreq)-floor(frequency_low/deltaFreq)+floor(maxNFFT/minNFFT/2)+1];
         [r c]=ind2sub(syls.ImageSize,syls.PixelIdxList{i});
         idx=ismember(foo,[c r],'rows');
         foo=data(j).MT(idx,1:4);
@@ -395,7 +343,7 @@ while ~eof
     end
 
     %merge harmonically related syllables
-    if(MERGE_HARMONICS~=0)
+    if(merge_harmonics~=0)
       syls3=ones(1,length(syls2));
       for i=1:(length(syls2)-1)
         if(isempty(syls.PixelIdxList{i}))  continue;  end
@@ -407,16 +355,12 @@ while ~eof
             doit=false;  position=nan(1,length(freq_contour{i}));
             for k=1:length(freq_contour{i})
               [c,ii,jj]=intersect(freq_contour{i}{k}(:,1),freq_contour{j}{1}(:,1));
-              if((length(c)/size(freq_contour{i}{k},1)<MERGE_HARMONICS_OVERLAP) && ...
-                 (length(c)/size(freq_contour{j}{1},1)<MERGE_HARMONICS_OVERLAP))
+              if((length(c)/size(freq_contour{i}{k},1)<merge_harmonics_overlap) && ...
+                 (length(c)/size(freq_contour{j}{1},1)<merge_harmonics_overlap))
                 continue;
               end
-              %doit=doit | ...
-              %    sum(sum(abs((freq_contour{i}{k}(ii,2)./freq_contour{j}{1}(jj,2))*...
-              %        [1/3 1/2 2/3 3/2 2 3]-1)<MERGE_FREQ_RATIO)...
-              %    >(MERGE_FREQ_FRACTION*length(c)));
               sum(abs((freq_contour{i}{k}(ii,2)./freq_contour{j}{1}(jj,2))*...
-                  [1/3 1/2 2/3 3/2 2 3]-1)<MERGE_HARMONICS_RATIO)>(MERGE_HARMONICS_FRACTION*length(c));
+                  [1/3 1/2 2/3 3/2 2 3]-1)<merge_harmonics_ratio)>(merge_harmonics_fraction*length(c));
               doit=doit | sum(ans);
               find(ans,1,'first');
               if(~isempty(ans))
@@ -457,9 +401,9 @@ while ~eof
     end
 
     %cull short vocalizations
-    if(MINIMUM_VOCALIZATION_LENGTH>0)
+    if(minimum_vocalization_length>0)
       reshape([syls2.BoundingBox],4,length(syls2))';
-      idx=find(((ans(:,3)-CONVOLUTION_SIZE_PIX(2)+1)*minNFFT/2/FS)>MINIMUM_VOCALIZATION_LENGTH);
+      idx=find(((ans(:,3)-convolution_size_pix(2)+1)*minNFFT/2/FS)>minimum_vocalization_length);
       syls.NumObjects=length(idx);
       syls.PixelIdxList={syls.PixelIdxList{idx}};
       syls2=regionprops(syls,'basic');
@@ -470,11 +414,11 @@ while ~eof
     %tmp(:,1)=tmp(:,1)-(CONV_SIZE(2)-1)/2+(CONV_SIZE(2)-1)/2;
     tmp(:,1)=tmp(:,1)-floor(maxNFFT/minNFFT/2)-1;
     tmp(:,2)=tmp(:,2)-floor(maxNFFT/minNFFT/2)-1;
-    tmp(:,3)=tmp(:,3)-CONVOLUTION_SIZE_PIX(2)+1;
+    tmp(:,3)=tmp(:,3)-convolution_size_pix(2)+1;
     skytruth=[skytruth; ...
         ([tmp(:,1) tmp(:,1)+tmp(:,3)]+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1))*minNFFT/2/FS ...
         zeros(size(tmp,1),1) ...
-        [tmp(:,2) tmp(:,2)+tmp(:,4)].*deltaFreq+FREQUENCY_LOW];
+        [tmp(:,2) tmp(:,2)+tmp(:,4)].*deltaFreq+frequency_low];
     freq_contours={freq_contours{:} freq_contour{:}};
     freq_contours2={freq_contours2{:} freq_contour2{:}};
 
@@ -483,10 +427,10 @@ while ~eof
       clf;  hold on;
 
       [r,c]=ind2sub(syls.ImageSize,cat(1,syls.PixelIdxList{:}));
-      c=c-(CONVOLUTION_SIZE_PIX(2)-1)/2+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1);
+      c=c-(convolution_size_pix(2)-1)/2+(chunk_curr-2)*CHUNK_TIME_WINDOWS(1);
       c=c-floor(maxNFFT/minNFFT/2)-1;
       r=r-floor(maxNFFT/minNFFT/2)-1;
-      plot(c.*(minNFFT/2)./FS,r.*deltaFreq+FREQUENCY_LOW,'bo');
+      plot(c.*(minNFFT/2)./FS,r.*deltaFreq+frequency_low,'bo');
 
       for i=1:length(syls2)
         for j=1:length(freq_contours{end-i+1})
@@ -502,17 +446,17 @@ while ~eof
       %     repmat([F_LOW; F_HIGH],1,length(chunk_splits)),'c');
 
       axis tight;
-      v=axis;  axis([v(1) v(2) FREQUENCY_LOW FREQUENCY_HIGH]);
+      v=axis;  axis([v(1) v(2) frequency_low frequency_high]);
       xlabel('time (s)');
       ylabel('frequency (Hz)');
 
-      [b,a]=butter(4,FREQUENCY_LOW/(FS/2),'high');
+      [b,a]=butter(4,frequency_low/(FS/2),'high');
 
       % plot hits, misses and false alarms separately
       while voc_num<=min([200 size(skytruth,1)])
         left=skytruth(voc_num,1);
         right=skytruth(voc_num,2);
-        ax2_print(voc_num,left,right,'voc',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS);
+        ax2_print(voc_num,left,right,'voc',filename,FS,minNFFT,SAVE_WAV,SAVE_PNG,b,a,channels);
         voc_num=voc_num+1;
       end
     end
@@ -527,16 +471,16 @@ while ~eof
 end
 
 %dump files
-disp([num2str(num) ': ' num2str(size(skytruth,1)) ' automatically segmented vocalizations']);
+disp([num2str(size(skytruth,1)) ' automatically segmented vocalizations']);
 
 tmp=[skytruth(:,1:2) skytruth(:,4:5)];
-save([filename '.voc'],'tmp','-ascii');
-save([filename '.fc'],'freq_contours');
-save([filename '.fc2'],'freq_contours2');
+save([filename_out '.voc'],'tmp','-ascii');
+save([filename_out '.fc'],'freq_contours');
+save([filename_out '.fc2'],'freq_contours2');
 
 varname=@(x) inputname(1);
-%fid=fopen(fullfile(directory,['params' sprintf('%d',CHANNELS) '.m']),'w');
-fid=fopen([filename '.params'],'w');
+%fid=fopen(fullfile(directory,['params' sprintf('%d',channels) '.m']),'w');
+fid=fopen([filename_out '.params'],'w');
 for i=1:length(data)
   jj=fieldnames(data(i));
   for j=1:length(jj)-2
@@ -558,30 +502,30 @@ VERSION=get_version();
 
 fprintf(fid,'VERSION=''%s'';\n',VERSION);
 fprintf(fid,'TIME_STAMP=''%s'';\n',datestr(now,30));
-fprintf(fid,'%s=%g;\n',varname(FREQUENCY_LOW),FREQUENCY_LOW);
-fprintf(fid,'%s=%g;\n',varname(FREQUENCY_HIGH),FREQUENCY_HIGH);
-fprintf(fid,'%s=[%g %g];\n',varname(CONVOLUTION_SIZE),CONVOLUTION_SIZE);
-fprintf(fid,'%s=%g;\n',varname(MINIMUM_OBJECT_AREA),MINIMUM_OBJECT_AREA);
-fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS),MERGE_HARMONICS);
-fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS_OVERLAP),MERGE_HARMONICS_OVERLAP);
-fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS_RATIO),MERGE_HARMONICS_RATIO);
-fprintf(fid,'%s=%g;\n',varname(MERGE_HARMONICS_FRACTION),MERGE_HARMONICS_FRACTION);
-fprintf(fid,'%s=%g;\n',varname(MINIMUM_VOCALIZATION_LENGTH),MINIMUM_VOCALIZATION_LENGTH);
-fprintf(fid,'%s=[%s];\n',varname(CHANNELS),num2str(CHANNELS));
+fprintf(fid,'%s=%g;\n',varname(frequency_low),frequency_low);
+fprintf(fid,'%s=%g;\n',varname(frequency_high),frequency_high);
+fprintf(fid,'%s=[%g %g];\n',varname(convolution_size),convolution_size);
+fprintf(fid,'%s=%g;\n',varname(minimum_object_area),minimum_object_area);
+fprintf(fid,'%s=%g;\n',varname(merge_harmonics),merge_harmonics);
+fprintf(fid,'%s=%g;\n',varname(merge_harmonics_overlap),merge_harmonics_overlap);
+fprintf(fid,'%s=%g;\n',varname(merge_harmonics_ratio),merge_harmonics_ratio);
+fprintf(fid,'%s=%g;\n',varname(merge_harmonics_fraction),merge_harmonics_fraction);
+fprintf(fid,'%s=%g;\n',varname(minimum_vocalization_length),minimum_vocalization_length);
+fprintf(fid,'%s=[%s];\n',varname(channels),num2str(channels));
 fclose(fid);
 
 
 
-function ax2_print(i,left,right,type,filename,FS,NFFT,SAVE_WAV,SAVE_PNG,b,a,CHANNELS)
+function ax2_print(i,left,right,type,filename,FS,NFFT,SAVE_WAV,SAVE_PNG,b,a,channels)
 
-if isempty(CHANNELS)
+if isempty(channels)
   d=dir([filename '.ch*']);
   [tmp{1:length(d)}]=deal(d.name);
-  CHANNELS=cellfun(@(x) str2num(x(end)),tmp);
+  channels=cellfun(@(x) str2num(x(end)),tmp);
 end
 
 tmp=[];  p=[];
-for j=CHANNELS
+for j=channels
   fid=fopen([filename '.ch' num2str(j)],'r');
   if(fid<0)  continue;  end
   fseek(fid,round(4*(round((left-0.025)*FS))),-1);
