@@ -25,7 +25,7 @@ if [ $# -ne 3 ] && [ $# -ne 5 ] ; then
 fi
 
 # parse parameters file
-eval $( sed "s/\[/\\(/g" $1 | sed "s/\]/\\)/g" | dos2unix )
+eval $( sed -e "s/\[/\\(/g" -e "s/\]/\\)/g" -e "s/,/ /g" -e "s/;/ /g" $1  | dos2unix )
 
 # get list of data files
 if [ -d $2 ] ; then
