@@ -19,6 +19,9 @@
 % manually annotated vocalizations, and false_alarm.num is the number of
 % the latter which overlap the former (lumps).
 %
+% the area calculations depend on the mapping toolbox, and are set to nan
+% if it is not available
+%
 % e.g.
 % [miss, false_alarm] = groundtruth(...
 % '/groups/egnor/egnorlab/ben/groundtruth/kelly_vs_meghan/m53606_m50733_urine_together_20121218_KellyAxGT20140311.voc',...
@@ -43,32 +46,38 @@ end
 
 if(plot_flag)
   figure;
-  subplot(2,1,1);  hold on;
+  subplot(4,1,1);  hold on;
 end
 miss=groundtruth_guts(ground_box, sky_box, 1, plot_flag);
 false_alarm=groundtruth_guts(sky_box, ground_box, 3, plot_flag);
 
 if(plot_flag)
-  subplot(2,2,3);
-  [n,x]=hist(miss.area,50);
-  bar(x,n,'barwidth',1,'facecolor','k');
-  num=sum(miss.area>0.5);  den=length(miss.area);
-  title([num2str(num) '/' num2str(den) '=' num2str(num/den*100,3) '% misses, ' ...
-      num2str(sum(miss.num>1)/den*100,3) '% splits']);
-  xlabel('miss score')
-  ylabel('# vocs');
-  axis tight;
-
-  subplot(2,2,4);
-  [n,x]=hist(false_alarm.area,50);
-  bar(x,n,'barwidth',1,'facecolor','k');
-  num=sum(false_alarm.area>0.5);  den=length(false_alarm.area);
-  title([num2str(num) '/' num2str(den) '=' num2str(num/den*100,3) '% false alarms, ' ...
-      num2str(sum(false_alarm.num>1)/den*100,3) '% lumps']);
-  xlabel('false alarm score');
-  ylabel('# vocs');
-  axis tight;
+  plot_guts(3, miss.area, miss.num, 'area', 1)
+  plot_guts(4, false_alarm.area, false_alarm.num, 'area', 2)
+  plot_guts(5, miss.freq, miss.num, 'freq', 1)
+  plot_guts(6, false_alarm.freq, false_alarm.num, 'freq', 2)
+  plot_guts(7, miss.time, miss.num, 'time', 1)
+  plot_guts(8, false_alarm.time, false_alarm.num, 'time', 2)
 end
+
+
+function plot_guts(idx, data, n, txt, type)
+
+if type==1
+  txt = {'% misses, ', '% splits', ['miss ' txt ' score']};
+else
+  txt = {'% false alarms, ', '% lumps', ['false alarm ' txt ' score']};
+end
+
+subplot(4,2,idx);
+[n,x]=hist(data,50);
+bar(x,n,'barwidth',1,'facecolor','k');
+num=sum(data>0.5);  den=length(data);
+title([num2str(num) '/' num2str(den) '=' num2str(num/den*100,3) txt{1} ...
+    num2str(sum(n>1)/den*100,3) txt{2}]);
+xlabel(txt{3});
+ylabel('# vocs');
+axis tight;
 
 
 function [x,y]=bbox2polygon(bbox)
@@ -92,20 +101,30 @@ for idx_this=1:size(this,1)
   for idx_that=1:size(that,1)
     if ((this(idx_this,2)<that(idx_that,1)) || (this(idx_this,1)>that(idx_that,2)) || ...
         (this(idx_this,4)<that(idx_that,3)) || (this(idx_this,3)>that(idx_that,4)))  continue;  end
-    [x,y]=bbox2polygon(that(idx_that,:));
-    [x0p,y0p]=polybool('subtraction',x0p,y0p,x,y);
+    try
+      [x,y]=bbox2polygon(that(idx_that,:));
+      [x0p,y0p]=polybool('subtraction',x0p,y0p,x,y);
+    end
     [freqB freqT]=MergeBrackets([freqB that(idx_that,3)],[freqT that(idx_that,4)]);
     [timeL timeR]=MergeBrackets([timeL that(idx_that,1)],[timeR that(idx_that,2)]);
     overlap.num(idx_this) = overlap.num(idx_this) + 1;
   end
-  [x0p,y0p]=polysplit(x0p,y0p);
-  overlap.area(idx_this) = sum(cellfun(@(x,y) (ispolycw(x,y)*2-1)*polyarea(x,y), x0p,y0p)) / polyarea(x0,y0);
+  try
+    [x0p,y0p]=polysplit(x0p,y0p);
+    overlap.area(idx_this) = sum(cellfun(@(x,y) (ispolycw(x,y)*2-1)*polyarea(x,y), x0p,y0p)) / ...
+        polyarea(x0,y0);
+  end
   [l r]=RangeIntersection(freqB,freqT,min(y0),max(y0));
   overlap.freq(idx_this) = ((max(y0)-min(y0)) - sum(r-l)) / (max(y0)-min(y0));
   [l r]=RangeIntersection(timeL,timeR,min(x0),max(x0));
   overlap.time(idx_this) = ((max(x0)-min(x0)) - sum(r-l)) / (max(x0)-min(x0));
   if(plot_flag)
-    c=[0 0 0];  c(color)=max(0,overlap.area(idx_this));
+    c=[0 0 0];
+    if ~isnan(overlap.area(idx_this))
+      c(color)=max(0,overlap.area(idx_this));
+    else
+      c(color)=max(0,overlap.freq(idx_this).*overlap.time(idx_this));
+    end
     line(this(idx_this,[1 2 2 1 1]),this(idx_this,[3 3 4 4 3]),'color',c,'linewidth',2);
   end
 end
