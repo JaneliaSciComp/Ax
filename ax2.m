@@ -70,7 +70,7 @@ switch nargin
     filenames_in=varargin{11};
     filename_out=varargin{12};
   otherwise
-    error([num2str(nargin) ' args input, either 2 or 11 expected']);
+    error([num2str(nargin) ' args input, either 2 or 12 expected']);
 end
 
 if(ischar(frequency_low))                 frequency_low=str2num(frequency_low);                               end

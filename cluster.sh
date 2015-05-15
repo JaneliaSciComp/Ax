@@ -95,6 +95,7 @@ if [ $(($3 & 1)) -gt 0 ] ; then
       k=$((k+1))
       logfiles="${logfiles} ${i_wavless}-${j}.log"
       qsub -N "ax$job_name-$j" \
+          -l sandy=true \
           -pe batch 16 \
           -b y -j y -cwd -o "$dir_name/$job_name-$j.log" \
           -V cluster1.sh "\"${FS[j]}\"" "\"${NFFT[j]}\"" "\"${NW[j]}\"" "\"${K[j]}\"" "\"${PVAL[j]}\"" "\"$i\"" "\"$j\"" "\"$4\"" "\"$5\""
@@ -126,6 +127,7 @@ if [ $(($3 & 2)) -gt 0 ] ; then
       axfiles="${axfiles} ${i_wavless}-${j}.ax"
     done
     qsub -N "ax$job_name" \
+        -l sandy=true \
         -b y -j y -cwd -o "$dir_name/$job_name.log" \
         -V cluster2.sh "\"${frequency_low}\"" "\"${frequency_high}\"" "\"${convolution_size[*]}\"" \
         "\"${minimum_object_area}\"" "\"${merge_harmonics}\"" "\"${merge_harmonics_overlap}\"" \

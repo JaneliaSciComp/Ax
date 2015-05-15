@@ -38,7 +38,11 @@ end
 close_it=0;
 if((exist('parpool')==2) && (length(gcp)==0))
   try
-    parpool;
+    if(isdeployed)
+      parpool(16);
+    else
+      parpool;
+    end
     close_it=1;
   catch
     disp('WARNING: could not open parallel pool of workers.  proceeding with a single thread.');
