@@ -17,7 +17,7 @@
 % NW: multi-taper time-bandwidth product
 % K: number of tapers
 % PVAL: F-test p-val threshold
-% FILENAME: the full path to a single .wav file containing all channels,
+% FILENAME: the full path to a single .wav or .bin file containing all channels,
 %   or of .ch[0-9] files, w/o the suffix, each with a single channel of float32s
 % SUFFIX: a string to append to FILENAME to differentiate parameter sets used
 % START,STOP: optional time range, in seconds
@@ -127,7 +127,38 @@ if(exist([FILENAME FILETYPE])==2)
   FILEPATH='';
   FILENAMES=[];
   try
-    info=audioinfo([FILENAME FILETYPE]);
+    if strcmp(FILETYPE,'.wav')
+      info=audioinfo([FILENAME FILETYPE]);
+    elseif strcmp(FILETYPE,'.bin')
+      fid = fopen([FILENAME FILETYPE], 'r');
+      version=fread(fid, 1, 'double');
+      info.SampleRate = fread(fid, 1, 'double');
+      info.NumChannels = fread(fid, 1, 'double');
+      switch version
+        case 1
+          first=ftell(fid);
+          fseek(fid,0,'eof');
+          last=ftell(fid);
+          info.TotalSamples=(last-first+1)/8/info.NumChannels;
+        case 2
+          first=ftell(fid);
+          fseek(fid,0,'eof');
+          last=ftell(fid);
+          info.TotalSamples=(last-first+1)/4/info.NumChannels;
+        case 3
+          tmp=fread(fid,[2 info.NumChannels],'double');
+          step=tmp(1,info.NumChannels);
+          offset=tmp(2,info.NumChannels);
+          fread(fid, obj.channel-1, 'int16');  % skip over first channels
+          first=ftell(fid);
+          fseek(fid,0,'eof');
+          last=ftell(fid);
+          info.TotalSamples=(last-first+1)/2/info.NumChannels;
+      end
+      fclose(fid);
+    else
+      error(['don''t know filetype ''' FILETYPE '''']);
+    end
   catch
     error(['can''t open file ''' FILENAME '''']);
   end
@@ -224,6 +255,8 @@ while(t<STOP_TIC)
         end
       case {'.wav','.WAV'}
         dd=audioread([FILENAME FILETYPE],[tmp+1 min(tmp+NSAMPLES, FILELEN_TIC)]);
+      case '.bin'
+        dd=binread([FILENAME FILETYPE],[tmp+1 min(tmp+NSAMPLES, FILELEN_TIC)]);
     end
     dd=single(dd);
     if(size(dd,1)<NSAMPLES)
