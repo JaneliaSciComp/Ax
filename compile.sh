@@ -21,7 +21,7 @@ mkdir -p ax1
   -w enable:missing_lib_sentinel \
   -w enable:demo_license \
   -v ax1.m \
-  -a version.txt
+  -a version.txt  # -a /full/path/to/omnivore/binread.m
 
 mkdir -p ax2
 
