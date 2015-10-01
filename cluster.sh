@@ -3,7 +3,7 @@
 # cd to folder containing cluster.sh and then execute:
 #   ./cluster.sh <full_path_to_parameters> <full_path_to_data> <multitaper_flag> [<start(s)> <stop(s)>]
 #
-# <full_path_to_data> can either be a folder of .wav or .ch files, or a single .wav file,
+# <full_path_to_data> can either be a folder of .wav, .bin, or .ch files, or a single .wav or .bin file,
 #   or a group of .ch files w/o the suffix
 #
 # for multitaper_flag,
@@ -19,6 +19,8 @@
 # if any are a scalar the same value is used for each call.  those which are
 # arrays must have the same length.
 
+shopt -s extglob
+
 if [ $# -ne 3 ] && [ $# -ne 5 ] ; then
   echo invalid arguments
   exit
@@ -29,7 +31,7 @@ eval $( sed -e "s/\[/\\(/g" -e "s/\]/\\)/g" -e "s/,/ /g" -e "s/;/ /g" $1  | dos2
 
 # get list of data files
 if [ -d $2 ] ; then
-  ii=$(ls -1 ${2%/}/*.wav ${2%/}/*.WAV 2> /dev/null)
+  ii=$(ls -1 ${2%/}/*{.wav,.WAV,.bin} 2> /dev/null)
   ii="${ii} $(ls -1 ${2%/}/*.ch* 2> /dev/null | sed s/\.ch[0-9]$// | uniq)"
   dir_name=$2
 else
@@ -87,13 +89,12 @@ if [ $(($3 & 1)) -gt 0 ] ; then
   logfiles=""
   for i in $ii ; do
     #echo $i
-    i_wavless=${i%.wav}
-    i_wavless=${i_wavless%.WAV}
-    job_name=$(basename $i_wavless)
+    i_suffixless=${i%+(.wav|.WAV|.bin)}
+    job_name=$(basename $i_suffixless)
     for j in $(seq 0 $((${#NFFT[@]} - 1))) ; do
       #echo $j
       k=$((k+1))
-      logfiles="${logfiles} ${i_wavless}-${j}.log"
+      logfiles="${logfiles} ${i_suffixless}-${j}.log"
       qsub -N "ax$job_name-$j" \
           -l sandy=true \
           -pe batch 16 \
@@ -119,12 +120,11 @@ fi
 if [ $(($3 & 2)) -gt 0 ] ; then
   echo starting ax2
   for i in $ii ; do
-    i_wavless=${i%.wav}
-    i_wavless=${i_wavless%.WAV}
-    job_name=$(basename $i_wavless)
+    i_suffixless=${i%+(.wav|.WAV|.bin)}
+    job_name=$(basename $i_suffixless)
     axfiles=""
     for j in $(seq 0 $((${#NFFT[@]} - 1))) ; do
-      axfiles="${axfiles} ${i_wavless}-${j}.ax"
+      axfiles="${axfiles} ${i_suffixless}-${j}.ax"
     done
     qsub -N "ax$job_name" \
         -l sandy=true \
@@ -132,7 +132,7 @@ if [ $(($3 & 2)) -gt 0 ] ; then
         -V cluster2.sh "\"${frequency_low}\"" "\"${frequency_high}\"" "\"${convolution_size[*]}\"" \
         "\"${minimum_object_area}\"" "\"${merge_harmonics}\"" "\"${merge_harmonics_overlap}\"" \
         "\"${merge_harmonics_ratio}\"" "\"${merge_harmonics_fraction}\"" \
-        "\"${minimum_vocalization_length}\"" "\"${channels[*]}\"" "\"${axfiles}\"" "\"${i_wavless}\""
+        "\"${minimum_vocalization_length}\"" "\"${channels[*]}\"" "\"${axfiles}\"" "\"${i_suffixless}\""
   done
   echo check the .log file to see when ax2 finishes
   echo goodbye
