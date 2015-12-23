@@ -279,16 +279,20 @@ while ~eof
         while j<=syls_next.NumObjects
           [rj cj]=ind2sub(syls_next.ImageSize,syls_next.PixelIdxList{j});
           if(sum(cj<=((convolution_size_pix(2)-1)/2))==0)  j=j+1;  continue;  end
-          %if((max(ri) < (min(rj)-1)) || (max(rj) < (min(ri)-1)))  j=j+1;  continue;  end
           %cj=cj+chunk_splits(k+1)-chunk_splits(k);
           cj=cj+CHUNK_TIME_WINDOWS(1);
+          if((max(ri) < (min(rj)-1)) || (max(rj) < (min(ri)-1)))  j=j+1;  continue;  end
+          if((max(ci) < (min(cj)-1)) || (max(cj) < (min(ci)-1)))  j=j+1;  continue;  end
 %           min(min((repmat(ri,1,length(rj))-repmat(rj',length(ri),1)).^2 + ...
 %                   (repmat(ci,1,length(cj))-repmat(cj',length(ci),1)).^2));
-          smallest=inf;
+          unsplit=false;
           for k=1:length(rj)
-            smallest=min(smallest, min((ri-rj(k)).^2 + (ci-cj(k)).^2));
+            if any(abs(ri-rj(k))<2 & abs(ci-cj(k))<2)
+              unsplit=true;
+              break;
+            end
           end
-          if smallest<=2
+          if unsplit
             %disp(['unsplitting syllable between chunks #' num2str(k) '-' num2str(k+1)]);
             flag=1;
             syls.PixelIdxList{i}=[syls.PixelIdxList{i}; ...
